@@ -64,6 +64,10 @@ const settingsPatch = z
     fontScale: z.number().min(0.85).max(1.5),
     density: z.enum(['compact', 'comfortable']),
     reduceMotion: z.enum(['system', 'always', 'never']),
+    sendWithEnter: z.boolean(),
+    showReasoningSummaries: z.boolean(),
+    chatWidth: z.enum(['comfortable', 'wide']),
+    customInstructions: z.string().max(4000),
     defaultProviderId: id,
     defaultModelId: z.string().max(200),
     defaultEngineId: engineId,
@@ -169,17 +173,27 @@ export const IPC_SCHEMAS: { [C in IpcInvokeChannel]: z.ZodType } = {
     .strict(),
   'conversations:read': z.object({ conversationId: id }).strict(),
   'conversations:items': z
-    .object({ conversationId: id, limit: z.number().int().min(1).max(2000).optional(), beforeSeq: z.number().optional() })
+    .object({
+      conversationId: id,
+      limit: z.number().int().min(1).max(2000).optional(),
+      beforeSeq: z.number().int().min(0).optional(),
+    })
     .strict(),
   'conversations:rename': z.object({ conversationId: id, title: z.string().min(1).max(200) }).strict(),
   'conversations:archive': z.object({ conversationId: id }).strict(),
   'conversations:unarchive': z.object({ conversationId: id }).strict(),
   'conversations:delete': z.object({ conversationId: id }).strict(),
   'conversations:fork': z
-    .object({ conversationId: id, fromItemId: id.optional(), title: z.string().max(200).optional() })
+    .object({
+      conversationId: id,
+      fromItemId: id.optional(),
+      exclusive: z.boolean().optional(),
+      title: z.string().max(200).optional(),
+    })
     .strict(),
   'conversations:setFavorite': z.object({ conversationId: id, favorite: z.boolean() }).strict(),
   'conversations:search': z.object({ query: z.string().max(500), limit: z.number().int().min(1).max(200).optional() }).strict(),
+  'conversations:export': z.object({ conversationId: id, format: z.enum(['markdown', 'json']) }).strict(),
   'conversations:saveDraft': z
     .object({ conversationId: id, text, attachmentIds: z.array(id).max(200) })
     .strict(),
@@ -271,4 +285,5 @@ export const IPC_RATE_LIMITS: Partial<Record<IpcInvokeChannel, { windowMs: numbe
   'workspaces:fileTree': { windowMs: 60_000, max: 120 },
   'shell:openExternal': { windowMs: 60_000, max: 30 },
   'diagnostics:export': { windowMs: 60_000, max: 5 },
+  'conversations:export': { windowMs: 60_000, max: 20 },
 };

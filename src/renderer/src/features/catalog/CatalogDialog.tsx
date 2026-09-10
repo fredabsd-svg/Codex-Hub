@@ -45,6 +45,15 @@ export function CatalogDialog({ open, onClose }: { open: boolean; onClose(): voi
   const [selectedId, setSelectedId] = useState<string | null>(conversation?.modelId ?? null);
   const [manualId, setManualId] = useState('');
 
+  // O diálogo fica montado o tempo todo; ao abrir, o provedor e o modelo
+  // exibidos precisam refletir a conversa ATUAL, não a de quando o app abriu.
+  useEffect(() => {
+    if (!open) return;
+    setProviderId(conversation?.providerId ?? providers[0]?.id ?? '');
+    setSelectedId(conversation?.modelId ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (open && providerId) void load(providerId);
   }, [open, providerId, load]);

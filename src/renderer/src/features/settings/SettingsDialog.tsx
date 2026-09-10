@@ -5,7 +5,7 @@
  * O repositório de configurações guarda apenas dados NÃO sensíveis.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import type { AppSettings } from '@shared/domain';
 import { t } from '../../i18n';
@@ -13,34 +13,58 @@ import { errorOf, invoke } from '../../lib/api';
 import { formatBytes, formatDateTime } from '../../lib/format';
 import { useAppStore } from '../../stores/appStore';
 import { useUiStore } from '../../stores/uiStore';
-import { Badge, Button, Field, IconButton, Input, SectionTitle, Select, Spinner, Switch } from '../../components/ui/primitives';
+import {
+  Badge,
+  Button,
+  Field,
+  IconButton,
+  Input,
+  Kbd,
+  SectionTitle,
+  Select,
+  Spinner,
+  Switch,
+  Textarea,
+} from '../../components/ui/primitives';
 import { Dialog } from '../../components/ui/Dialog';
 import { IconAlert, IconExternal, IconKey, IconRefresh, IconTrash } from '../../components/ui/icons';
 
 type SectionId =
   | 'appearance'
+  | 'chat'
   | 'defaults'
   | 'providers'
   | 'codex'
   | 'permissions'
   | 'tools'
   | 'attachments'
+  | 'shortcuts'
   | 'diagnostics';
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'appearance', label: t('settings.sections.appearance') },
+  { id: 'chat', label: t('settings.sections.chat') },
   { id: 'defaults', label: t('settings.sections.defaults') },
   { id: 'providers', label: t('settings.sections.providers') },
   { id: 'codex', label: t('settings.sections.codex') },
   { id: 'permissions', label: t('settings.sections.permissions') },
   { id: 'tools', label: t('settings.sections.tools') },
   { id: 'attachments', label: t('settings.sections.attachments') },
+  { id: 'shortcuts', label: t('settings.sections.shortcuts') },
   { id: 'diagnostics', label: t('settings.sections.diagnostics') },
 ];
 
+const SECTION_IDS = new Set<string>(SECTIONS.map((entry) => entry.id));
+
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): void }) {
-  const initialSection = useUiStore((state) => state.settingsSection) as SectionId;
-  const [section, setSection] = useState<SectionId>(initialSection ?? 'appearance');
+  const requestedSection = useUiStore((state) => state.settingsSection);
+  const [section, setSection] = useState<SectionId>('appearance');
+
+  // O diálogo fica montado o tempo todo: a seção pedida por `openDialog`
+  // (ex.: "Configurações › Codex" em um aviso) é aplicada a cada abertura.
+  useEffect(() => {
+    if (open && SECTION_IDS.has(requestedSection)) setSection(requestedSection as SectionId);
+  }, [open, requestedSection]);
 
   return (
     <Dialog open={open} onClose={onClose} title={t('settings.title')} width={880}>
@@ -67,7 +91,9 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose(): vo
 
         <div className="min-w-0 space-y-4">
           {section === 'appearance' ? <AppearanceSection /> : null}
+          {section === 'chat' ? <ChatSection /> : null}
           {section === 'defaults' ? <DefaultsSection /> : null}
+          {section === 'shortcuts' ? <ShortcutsSection /> : null}
           {section === 'providers' ? <ProvidersSection /> : null}
           {section === 'codex' ? <CodexSection /> : null}
           {section === 'permissions' ? <PermissionsSection /> : null}
@@ -104,7 +130,11 @@ function AppearanceSection() {
           <option value="system">{t('settings.themeSystem')}</option>
         </Select>
       </Field>
-      <Field label={`${t('settings.fontScale')} (${Math.round(settings.fontScale * 100)}%)`} htmlFor="settings-font">
+      <Field
+        label={`${t('settings.fontScale')} (${Math.round(settings.fontScale * 100)}%)`}
+        hint={t('settings.fontScaleHint')}
+        htmlFor="settings-font"
+      >
         <input
           id="settings-font"
           type="range"
@@ -137,6 +167,110 @@ function AppearanceSection() {
           <option value="never">{t('settings.reduceMotionNever')}</option>
         </Select>
       </Field>
+    </section>
+  );
+}
+
+/* -------------------- Conversa -------------------- */
+
+function ChatSection() {
+  const [settings, update] = useSettings();
+  const [instructions, setInstructions] = useState(settings.customInstructions ?? '');
+  useEffect(() => setInstructions(settings.customInstructions ?? ''), [settings.customInstructions]);
+  const dirty = instructions !== (settings.customInstructions ?? '');
+
+  return (
+    <section className="space-y-4">
+      <SectionTitle>{t('settings.sections.chat')}</SectionTitle>
+      <Switch
+        checked={settings.sendWithEnter}
+        onChange={(value) => update({ sendWithEnter: value })}
+        label={t('settings.sendWithEnter')}
+        hint={t('settings.sendWithEnterHint')}
+      />
+      <Switch
+        checked={settings.showReasoningSummaries}
+        onChange={(value) => update({ showReasoningSummaries: value })}
+        label={t('settings.showReasoning')}
+        hint={t('settings.showReasoningHint')}
+      />
+      <Field label={t('settings.chatWidth')} htmlFor="settings-chat-width">
+        <Select
+          id="settings-chat-width"
+          value={settings.chatWidth}
+          onChange={(event) => update({ chatWidth: event.target.value as AppSettings['chatWidth'] })}
+        >
+          <option value="comfortable">{t('settings.chatWidthComfortable')}</option>
+          <option value="wide">{t('settings.chatWidthWide')}</option>
+        </Select>
+      </Field>
+      <Field
+        label={t('settings.customInstructions')}
+        hint={t('settings.customInstructionsHint')}
+        htmlFor="settings-instructions"
+      >
+        <Textarea
+          id="settings-instructions"
+          rows={5}
+          maxLength={4000}
+          value={instructions}
+          onChange={(event) => setInstructions(event.target.value)}
+          placeholder={t('settings.customInstructionsPlaceholder')}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-[var(--text-faint)]">{instructions.length} / 4000</span>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={!dirty}
+            disabledReason="Nada a salvar."
+            onClick={() => update({ customInstructions: instructions.trim() })}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+      </Field>
+    </section>
+  );
+}
+
+/* -------------------- Atalhos -------------------- */
+
+const SHORTCUTS: Array<{ keys: string[]; label: 'newConversation' | 'palette' | 'workspace' | 'attach' | 'send' | 'settings' | 'sidebar' | 'rightPanel' | 'escape' }> = [
+  { keys: ['Ctrl', 'N'], label: 'newConversation' },
+  { keys: ['Ctrl', 'K'], label: 'palette' },
+  { keys: ['Ctrl', 'O'], label: 'workspace' },
+  { keys: ['Ctrl', 'Shift', 'O'], label: 'attach' },
+  { keys: ['Ctrl', 'Enter'], label: 'send' },
+  { keys: ['Ctrl', ','], label: 'settings' },
+  { keys: ['Ctrl', 'B'], label: 'sidebar' },
+  { keys: ['Ctrl', 'J'], label: 'rightPanel' },
+  { keys: ['Esc'], label: 'escape' },
+];
+
+function ShortcutsSection() {
+  const [settings] = useSettings();
+  return (
+    <section className="space-y-3">
+      <SectionTitle>{t('shortcuts.title')}</SectionTitle>
+      <dl className="ch-raised divide-y" style={{ borderColor: 'var(--border)' }}>
+        {SHORTCUTS.map((shortcut) => (
+          <div key={shortcut.label} className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]">
+            <dt className="text-[var(--text)]">
+              {shortcut.label === 'send' && settings.sendWithEnter ? t('shortcuts.sendEnter') : t(`shortcuts.${shortcut.label}`)}
+            </dt>
+            <dd className="flex flex-none items-center gap-0.5">
+              {(shortcut.label === 'send' && settings.sendWithEnter ? ['Enter'] : shortcut.keys).map((key, index) => (
+                <span key={`${shortcut.label}-${index}`} className="flex items-center gap-0.5">
+                  {index > 0 ? <span className="text-[var(--text-faint)]">+</span> : null}
+                  <Kbd>{key}</Kbd>
+                </span>
+              ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">{t('shortcuts.note')}</p>
     </section>
   );
 }

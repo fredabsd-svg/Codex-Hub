@@ -6,11 +6,12 @@
  * isso, é apresentada como "solicitada".
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ConversationSummary, GitSummary } from '@shared/domain';
+import { summarizeUsage } from '@shared/conversationExport';
 import { t } from '../../i18n';
 import { invoke } from '../../lib/api';
-import { truncateMiddle } from '../../lib/format';
+import { formatTokens, truncateMiddle } from '../../lib/format';
 import { useAppStore } from '../../stores/appStore';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -32,6 +33,8 @@ const NETWORK_LABEL: Record<string, string> = {
 
 export function StatusBar({ conversation }: { conversation: ConversationSummary | null }) {
   const runtime = useConversationStore((state) => (conversation ? state.runtime[conversation.id] : undefined));
+  const items = useConversationStore((state) => (conversation ? state.items[conversation.id] : undefined));
+  const totals = useMemo(() => summarizeUsage(items ?? []), [items]);
   const settings = useAppStore((state) => state.settings);
   const pushToast = useUiStore((state) => state.pushToast);
   const [git, setGit] = useState<GitSummary | null>(null);
@@ -128,6 +131,26 @@ export function StatusBar({ conversation }: { conversation: ConversationSummary 
       </div>
 
       <div className="ml-auto flex flex-none items-center gap-2">
+        {totals.totalTokens !== undefined ? (
+          <Tooltip
+            content={`${t('rightPanel.totalsAll')}: ${totals.totalTokens}${
+              totals.reportedCost !== undefined
+                ? ` · ${t('rightPanel.totalsReported')}: ${totals.currency} ${totals.reportedCost.toFixed(4)}`
+                : totals.estimatedCost !== undefined
+                  ? ` · ${t('rightPanel.totalsEstimated')}: ${totals.currency} ${totals.estimatedCost.toFixed(4)}`
+                  : ''
+            }`}
+          >
+            <span tabIndex={0} className="text-[var(--text-muted)]">
+              {t('chat.tokens', { count: formatTokens(totals.totalTokens) })}
+              {totals.reportedCost !== undefined
+                ? ` · ${totals.currency} ${totals.reportedCost.toFixed(4)}`
+                : totals.estimatedCost !== undefined
+                  ? ` · ≈ ${totals.currency} ${totals.estimatedCost.toFixed(4)}`
+                  : ''}
+            </span>
+          </Tooltip>
+        ) : null}
         <Popover
           label={t('statusBar.policy')}
           align="end"

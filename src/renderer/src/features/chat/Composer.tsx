@@ -5,7 +5,12 @@
  * seleção de skills, envio e interrupção, rascunho por conversa e escolha
  * explícita entre NOVO TURNO e ORIENTAÇÃO ao turno em andamento.
  *
- * IME: nada é enviado enquanto há composição de texto em andamento.
+ * Envio: Ctrl+Enter por padrão; com a preferência "Enter envia", Enter envia
+ * e Shift+Enter quebra linha. IME: nada é enviado enquanto há composição de
+ * texto em andamento.
+ *
+ * O rascunho é gravado com atraso curto e SEMPRE ao trocar de conversa ou
+ * desmontar: nada digitado se perde por causa do atraso.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,16 +18,17 @@ import clsx from 'clsx';
 import type { AttachmentRef, ConversationSummary } from '@shared/domain';
 import { t } from '../../i18n';
 import { errorOf, invoke, pathForFile } from '../../lib/api';
-import { formatBytes } from '../../lib/format';
+import { formatBytes, formatNumber } from '../../lib/format';
 import { useAppStore } from '../../stores/appStore';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useUiStore } from '../../stores/uiStore';
-import { Badge, Button, IconButton, Segmented, Spinner } from '../../components/ui/primitives';
+import { Badge, Button, IconButton, Kbd, Segmented, Spinner } from '../../components/ui/primitives';
 import { Popover, Tooltip } from '../../components/ui/Popover';
 import { IconClose, IconFile, IconPaperclip, IconSend, IconSkill, IconStop } from '../../components/ui/icons';
 
 const MIN_ROWS = 2;
 const MAX_HEIGHT = 320;
+const LONG_TEXT = 8000;
 const EMPTY_ATTACHMENTS: AttachmentRef[] = [];
 
 export interface ComposerHandle {
@@ -49,6 +55,7 @@ export function Composer({
 
   const skills = useAppStore((state) => state.skills);
   const setSkillEnabled = useAppStore((state) => state.setSkillEnabled);
+  const sendWithEnter = useAppStore((state) => state.settings.sendWithEnter);
   const pushError = useUiStore((state) => state.pushError);
   const pushToast = useUiStore((state) => state.pushToast);
 
@@ -59,6 +66,7 @@ export function Composer({
   const [intent, setIntent] = useState<'newTurn' | 'steer'>('newTurn');
 
   const running = runtime?.status === 'running' || runtime?.status === 'awaitingApproval';
+  const interrupting = runtime?.status === 'interrupting';
   const steerSupported = conversation?.engineId === 'codex';
   const text = draft?.text ?? '';
   // Referência estável: sem isso, `submit` seria recriado a cada render.
@@ -78,12 +86,29 @@ export function Composer({
 
   useEffect(autoGrow, [text, autoGrow]);
 
-  // Rascunho é gravado com atraso curto para não escrever a cada tecla.
+  // Rascunho é gravado com atraso curto para não escrever a cada tecla, e
+  // imediatamente ao trocar de conversa ou desmontar.
+  const conversationId = conversation?.id;
+  const dirty = useRef(false);
   useEffect(() => {
-    if (!conversation) return;
-    const timer = window.setTimeout(() => void persistDraft(conversation.id), 600);
+    if (!conversationId) return;
+    dirty.current = true;
+    const timer = window.setTimeout(() => {
+      dirty.current = false;
+      void persistDraft(conversationId);
+    }, 600);
     return () => window.clearTimeout(timer);
-  }, [conversation, text, attachments.length, persistDraft]);
+  }, [conversationId, text, attachments.length, persistDraft]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    return () => {
+      if (dirty.current) {
+        dirty.current = false;
+        void persistDraft(conversationId);
+      }
+    };
+  }, [conversationId, persistDraft]);
 
   const attachFromPaths = useCallback(
     async (paths: string[]) => {
@@ -114,6 +139,8 @@ export function Composer({
     }
   }, [conversation, addAttachments, pushError]);
 
+  const enabledSkills = useMemo(() => skills.filter((skill) => skill.enabledLocally), [skills]);
+
   const submit = useCallback(async () => {
     if (!conversation) return;
     if (composing) return; // composição por IME em andamento
@@ -125,12 +152,15 @@ export function Composer({
       text,
       attachmentIds: attachments.map((attachment) => attachment.id),
       asSteer,
+      // A seleção de skills vai ao backend a cada turno; o motor só recebe
+      // as escolhidas. Sem skills descobertas, nada é enviado.
+      parameters: skills.length > 0 ? { skillIds: enabledSkills.map((skill) => skill.id) } : undefined,
     });
     if (ok) {
       setIntent('newTurn');
       window.setTimeout(autoGrow, 0);
     }
-  }, [conversation, composing, text, attachments, intent, running, steerSupported, send, autoGrow]);
+  }, [conversation, composing, text, attachments, intent, running, steerSupported, send, autoGrow, skills.length, enabledSkills]);
 
   useEffect(() => {
     registerHandle({
@@ -140,8 +170,6 @@ export function Composer({
     });
     return () => registerHandle(null);
   }, [registerHandle, attachViaDialog, submit]);
-
-  const enabledSkills = useMemo(() => skills.filter((skill) => skill.enabledLocally), [skills]);
 
   const onPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>): Promise<void> => {
     if (!conversation) return;
@@ -189,13 +217,27 @@ export function Composer({
     await attachFromPaths(paths);
   };
 
+  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key !== 'Enter') return;
+    const ctrl = event.ctrlKey || event.metaKey;
+    const plainEnter = !ctrl && !event.shiftKey && !event.altKey;
+    if (!ctrl && !(sendWithEnter && plainEnter)) return;
+    event.preventDefault();
+    // Impede que o atalho global (window) receba o mesmo evento e
+    // dispare um SEGUNDO envio do mesmo texto.
+    event.stopPropagation();
+    event.nativeEvent.stopImmediatePropagation();
+    if (!composing && !event.nativeEvent.isComposing) void submit();
+  };
+
   const disabled = !conversation;
   const canSend = !disabled && (text.trim() !== '' || attachments.length > 0);
+  const length = text.length;
 
   return (
     <div
-      className={clsx('flex-none border-t px-4 py-3', dragging && 'ring-1 ring-inset ring-[var(--accent)]')}
-      style={{ background: 'var(--surface-1)' }}
+      className={clsx('flex-none border-t px-4', dragging && 'ring-1 ring-inset ring-[var(--accent)]')}
+      style={{ background: 'var(--surface-1)', paddingTop: 'var(--gap)', paddingBottom: 'var(--gap)' }}
       onDragOver={(event) => {
         event.preventDefault();
         if (!dragging) setDragging(true);
@@ -205,7 +247,7 @@ export function Composer({
       }}
       onDrop={(event) => void onDrop(event)}
     >
-      <div className="mx-auto w-full max-w-[880px]">
+      <div className="mx-auto w-full" style={{ maxWidth: 'var(--chat-max-width)' }}>
         {dragging ? (
           <p className="mb-2 text-center text-[12.5px] text-[var(--accent)]">{t('composer.dropHere')}</p>
         ) : null}
@@ -219,9 +261,7 @@ export function Composer({
               {attachments.map((attachment) => (
                 <li key={attachment.id}>
                   <span
-                    className={clsx(
-                      'inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 py-1 text-[12px]',
-                    )}
+                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 py-1 text-[12px]"
                     style={{
                       background: 'var(--surface-2)',
                       borderColor: attachment.error ? 'var(--danger)' : 'var(--border)',
@@ -231,9 +271,7 @@ export function Composer({
                     <IconFile size={12} className="flex-none text-[var(--text-faint)]" />
                     <span className="max-w-[220px] truncate text-[var(--text)]">{attachment.fileName}</span>
                     {attachment.sizeBytes !== undefined ? (
-                      <span className="text-[11px] text-[var(--text-faint)]">
-                        {formatBytes(attachment.sizeBytes)}
-                      </span>
+                      <span className="text-[11px] text-[var(--text-faint)]">{formatBytes(attachment.sizeBytes)}</span>
                     ) : null}
                     {attachment.error ? <Badge tone="danger">falhou</Badge> : null}
                     <IconButton
@@ -275,7 +313,10 @@ export function Composer({
         ) : null}
 
         <div
-          className="flex items-end gap-2 rounded-[var(--radius-lg)] border px-2.5 py-2"
+          className={clsx(
+            'flex items-end gap-2 rounded-[var(--radius-lg)] border px-2.5 py-2 transition-[border-color,box-shadow] duration-150',
+            'focus-within:border-[var(--border-focus)] focus-within:shadow-[0_0_0_3px_var(--accent-ring)]',
+          )}
           style={{ background: 'var(--surface-inset)', borderColor: 'var(--border-strong)' }}
         >
           <div className="flex flex-none items-center gap-0.5 pb-0.5">
@@ -342,28 +383,26 @@ export function Composer({
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
             onPaste={(event) => void onPaste(event)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                // Impede que o atalho global (window) receba o mesmo evento e
-                // dispare um SEGUNDO envio do mesmo texto.
-                event.stopPropagation();
-                event.nativeEvent.stopImmediatePropagation();
-                if (!composing && !event.nativeEvent.isComposing) void submit();
-              }
-            }}
-            placeholder={intent === 'steer' ? t('composer.placeholderSteer') : t('composer.placeholder')}
+            onKeyDown={onKeyDown}
+            placeholder={
+              intent === 'steer'
+                ? t('composer.placeholderSteer')
+                : sendWithEnter
+                  ? t('composer.placeholderEnter')
+                  : t('composer.placeholder')
+            }
             aria-label={t('composer.placeholder')}
             className="min-h-[44px] flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none disabled:cursor-not-allowed"
             style={{ maxHeight: MAX_HEIGHT }}
           />
 
           <div className="flex flex-none items-center gap-1.5 pb-0.5">
-            {running ? (
+            {running || interrupting ? (
               <Button
                 size="sm"
                 variant="secondary"
                 iconLeft={<IconStop />}
+                loading={interrupting}
                 onClick={() => conversation && void interrupt(conversation.id)}
               >
                 {t('composer.stop')}
@@ -377,18 +416,39 @@ export function Composer({
               disabled={!canSend}
               disabledReason={disabled ? 'Crie uma conversa primeiro.' : 'Escreva algo ou anexe um arquivo.'}
             >
-              {t('composer.send')}
+              {sendWithEnter ? t('composer.sendEnter') : t('composer.send')}
             </Button>
           </div>
         </div>
 
-        <p className="mt-1.5 text-[11px] text-[var(--text-faint)]">
-          {conversation?.mode === 'chat'
-            ? t('header.modes.chatHint')
-            : conversation?.mode === 'plan'
-              ? t('header.modes.planHint')
-              : t('header.modes.executeHint')}
-        </p>
+        <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[var(--text-faint)]">
+          <span className="min-w-0 flex-1 truncate">
+            {conversation?.mode === 'chat'
+              ? t('header.modes.chatHint')
+              : conversation?.mode === 'plan'
+                ? t('header.modes.planHint')
+                : t('header.modes.executeHint')}
+          </span>
+          {length > 0 ? (
+            <span className={clsx('flex-none', length > LONG_TEXT && 'text-[var(--warning)]')}>
+              {length > LONG_TEXT
+                ? t('composer.charactersLong', { count: formatNumber(length) })
+                : t('composer.characters', { count: formatNumber(length) })}
+            </span>
+          ) : null}
+          <span className="hidden flex-none items-center gap-1 sm:inline-flex">
+            {sendWithEnter ? (
+              <>
+                <Kbd>Enter</Kbd> {t('composer.send').replace(/\s*\(.*\)$/, '').toLowerCase()} · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd>{' '}
+                nova linha
+              </>
+            ) : (
+              <>
+                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd> {t('composer.send').replace(/\s*\(.*\)$/, '').toLowerCase()}
+              </>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );

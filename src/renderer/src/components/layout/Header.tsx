@@ -16,7 +16,8 @@ import { useUiStore } from '../../stores/uiStore';
 import { Badge, Button, IconButton, Segmented } from '../ui/primitives';
 import { Popover, Tooltip } from '../ui/Popover';
 import { EffortPicker, ModelPicker } from '../../features/catalog/ModelPicker';
-import { IconFolder, IconPanelRight, IconRefresh, IconSpark } from '../ui/icons';
+import { ConversationMenu } from './Sidebar';
+import { IconCoins, IconFolder, IconPanelRight, IconRefresh, IconSpark } from '../ui/icons';
 
 export function Header({ conversation }: { conversation: ConversationSummary | null }) {
   const workspaces = useAppStore((state) => state.workspaces);
@@ -214,7 +215,9 @@ export function Header({ conversation }: { conversation: ConversationSummary | n
               type="button"
               className="flex h-8 flex-none items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)] border px-2 text-[12px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-3)]"
               style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+              title={t('header.usage')}
             >
+              <IconCoins size={13} className="text-[var(--text-faint)]" />
               {providerUsage?.balance
                 ? `${providerUsage.balance.currency} ${providerUsage.balance.amount.toFixed(2)}`
                 : t('header.usage')}
@@ -275,7 +278,9 @@ export function Header({ conversation }: { conversation: ConversationSummary | n
           </div>
         </Popover>
 
-        <Tooltip content={layout.rightPanelCollapsed ? t('rightPanel.open') : t('rightPanel.close')}>
+        {conversation ? <ConversationMenu conversation={conversation} /> : null}
+
+        <Tooltip content={`${layout.rightPanelCollapsed ? t('rightPanel.open') : t('rightPanel.close')} (Ctrl+J)`}>
           <IconButton
             label={layout.rightPanelCollapsed ? t('rightPanel.open') : t('rightPanel.close')}
             active={!layout.rightPanelCollapsed}

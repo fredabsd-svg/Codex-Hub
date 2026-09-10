@@ -15,6 +15,13 @@ import { hasReservedWindowsName } from '../services/pathSafety';
 import { buildUnifiedDiff, isProbablyBinary } from './diff';
 import { truncateResult, type ToolDefinition, type ToolResult } from './types';
 
+/** Nomes de arquivo que tipicamente contêm credenciais. */
+export function isSecretLikeFile(name: string): boolean {
+  if (name === '.env.example' || name === '.env.sample' || name === '.env.template') return false;
+  if (name === '.env' || name.startsWith('.env.')) return true;
+  return /^\.(npmrc|netrc|pypirc|yarnrc|git-credentials)$/.test(name) || /\.(pem|key|p12|pfx)$/i.test(name);
+}
+
 const IGNORED_DIRECTORIES = new Set([
   'node_modules',
   '.git',
@@ -88,10 +95,10 @@ export const listFilesTool: ToolDefinition<typeof listFilesSchema> = {
           truncated = true;
           return;
         }
-        if (dirent.name.startsWith('.') && dirent.name !== '.env.example') {
-          if (dirent.isDirectory() && IGNORED_DIRECTORIES.has(dirent.name)) continue;
-        }
         if (dirent.isDirectory() && IGNORED_DIRECTORIES.has(dirent.name)) continue;
+        // Arquivos que costumam guardar segredos não são listados ao modelo.
+        // `.env.example` é documentação e continua visível.
+        if (dirent.isFile() && isSecretLikeFile(dirent.name)) continue;
         const child = join(absolute, dirent.name);
         // Revalida cada caminho: um symlink pode apontar para fora.
         const safe = ctx.guard.tryResolve(child);

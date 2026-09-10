@@ -259,6 +259,63 @@ export const IconPanelLeft = (p: IconProps) => (
   </Icon>
 );
 
+export const IconWrap = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 4h10M3 8h7.5a2 2 0 010 4H9M3 12h3" />
+    <path d="M10.5 10.5L9 12l1.5 1.5" />
+  </Icon>
+);
+
+export const IconDownload = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5" />
+    <path d="M3 13h10" />
+  </Icon>
+);
+
+export const IconEdit = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10.5 2.8l2.7 2.7-7.4 7.4H3.1v-2.7z" />
+    <path d="M9.2 4.1l2.7 2.7" />
+  </Icon>
+);
+
+export const IconMore = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="3.5" cy="8" r="1" fill="currentColor" />
+    <circle cx="8" cy="8" r="1" fill="currentColor" />
+    <circle cx="12.5" cy="8" r="1" fill="currentColor" />
+  </Icon>
+);
+
+export const IconKeyboard = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2" y="4" width="12" height="8" rx="1.5" />
+    <path d="M4.5 6.5h1M7.5 6.5h1M10.5 6.5h1M4.5 9.5h7" />
+  </Icon>
+);
+
+export const IconSun = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="8" r="2.6" />
+    <path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1" />
+  </Icon>
+);
+
+export const IconMoon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 9.6A5.5 5.5 0 016.4 3a5.5 5.5 0 106.6 6.6z" />
+  </Icon>
+);
+
+export const IconCoins = (p: IconProps) => (
+  <Icon {...p}>
+    <ellipse cx="8" cy="4.5" rx="5" ry="2" />
+    <path d="M3 4.5v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3" />
+    <path d="M3 7.5v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3" />
+  </Icon>
+);
+
 export const IconSkill = (p: IconProps) => (
   <Icon {...p}>
     <path d="M8 2.5l4.5 2.3v3.4c0 2.2-1.8 4.2-4.5 5.3-2.7-1.1-4.5-3.1-4.5-5.3V4.8z" />

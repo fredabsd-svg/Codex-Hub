@@ -156,6 +156,18 @@ e indexadas em memória.
 - Markdown renderizado sem `dangerouslySetInnerHTML`, com lista de protocolos
   permitidos em links.
 - Tudo em pt-BR em `i18n/pt-BR.ts`, pronto para tradução.
+- Realce de sintaxe em `lib/highlight.tsx`: tokenizador próprio que devolve
+  elementos React (nunca HTML) e cai para texto puro em linguagem desconhecida.
+- Exportação de conversas em `shared/conversationExport.ts`: função pura usada
+  pelo processo principal (`conversations:export`, com diálogo de salvar) e pelo
+  renderer (copiar como Markdown). Os totais de uso da conversa vêm da mesma
+  função (`summarizeUsage`), somando apenas o que o provedor informou.
+- Sobreposições: `Dialog`/`Popover` focam primeiro `[data-autofocus]`, depois o
+  primeiro campo de texto, e nunca roubam um foco que já está dentro do painel.
+  Com uma sobreposição aberta, os atalhos globais ficam inativos (exceto Ctrl+K
+  e Esc). Confirmações usam `ConfirmDialog` (nada de `window.confirm`).
+- "Tamanho da interface" é aplicado pelo processo principal como zoom da
+  janela (`webContents.setZoomFactor`), não por uma variável de fonte.
 
 ## Atualizações
 

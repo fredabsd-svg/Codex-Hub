@@ -2,7 +2,7 @@
 
 ```bash
 npm run verify     # typecheck (main + renderer) + lint + testes
-npm run test       # Vitest: unit + integração + renderer  (346 testes)
+npm run test       # Vitest: unit + integração + renderer  (376 testes)
 npm run build      # typecheck + build de produção (necessário antes do e2e)
 npm run test:e2e   # Playwright + Electron (20 testes)
 npm run dist:dir   # empacota; habilita o teste do aplicativo empacotado
@@ -94,6 +94,21 @@ primeiro lugar; streaming aplicado a partir de eventos reais; **Ctrl+Enter envia
 uma vez, não duas**; IME não envia durante composição; navegação por teclado na
 paleta e no catálogo; fila de aprovação; Markdown sem HTML bruto e com
 protocolos restritos; diff.
+
+`improvements.test.tsx` cobre as regressões das melhorias: foco inicial dos
+diálogos no campo de busca (não no botão "Fechar"); atalhos globais inativos com
+um diálogo aberto; paleta pesquisando no conteúdo das mensagens e mostrando
+atalhos; Enter envia só com a preferência ligada (Shift+Enter quebra linha);
+rascunho gravado ao desmontar; exclusão com diálogo de confirmação próprio;
+totais de tokens e custo no painel de contexto. `highlight.test.tsx` garante que
+o realce de sintaxe nunca perde texto nem interpreta HTML.
+
+### Exportação e título (`conversationExport.test.ts`)
+
+Markdown com cabeçalho, mensagens, uso por turno e totais (estimativa sempre
+rotulada, custo ausente nunca vira zero), cercas de código maiores do que as
+internas, JSON com formato declarado, nome de arquivo seguro e derivação do
+título a partir da primeira mensagem (sem marcação, cortado em palavra).
 
 ### Fluxos no Electron (`tests/e2e`)
 

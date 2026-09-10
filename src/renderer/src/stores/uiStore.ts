@@ -27,14 +27,25 @@ export type DialogName =
   | 'palette'
   | 'skills'
   | 'workspaces'
-  | 'compatibleProvider'
   | null;
+
+/** Pedido de confirmação exibido pelo `ConfirmDialog` (substitui `window.confirm`). */
+export interface ConfirmRequest {
+  id: number;
+  title: string;
+  body?: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  tone?: 'default' | 'danger';
+  resolve(accepted: boolean): void;
+}
 
 interface UiState {
   layout: LayoutPreferences;
   dialog: DialogName;
   settingsSection: string;
   toasts: ToastItem[];
+  confirmRequest: ConfirmRequest | null;
   /** Conversa cujo painel de aprovação está expandido. */
   approvalsExpanded: boolean;
   autoScroll: boolean;
@@ -48,6 +59,9 @@ interface UiState {
   pushError(detail: ErrorDetail, fallbackTitle?: string): string;
   dismissToast(id: string): void;
   clearToasts(): void;
+  /** Abre um diálogo de confirmação e resolve com a decisão. */
+  confirm(options: Omit<ConfirmRequest, 'id' | 'resolve'>): Promise<boolean>;
+  resolveConfirm(accepted: boolean): void;
   setAutoScroll(value: boolean): void;
   setApprovalsExpanded(value: boolean): void;
   setWindowWidth(width: number): void;
@@ -62,12 +76,14 @@ const DEFAULT_LAYOUT: LayoutPreferences = {
 };
 
 let toastCounter = 0;
+let confirmCounter = 0;
 
 export const useUiStore = create<UiState>((set, get) => ({
   layout: DEFAULT_LAYOUT,
   dialog: null,
   settingsSection: 'appearance',
   toasts: [],
+  confirmRequest: null,
   approvalsExpanded: true,
   autoScroll: true,
   windowWidth: typeof window === 'undefined' ? 1440 : window.innerWidth,
@@ -110,6 +126,21 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   clearToasts() {
     set({ toasts: [] });
+  },
+
+  confirm(options) {
+    // Um pedido por vez: um novo pedido cancela o anterior.
+    get().confirmRequest?.resolve(false);
+    confirmCounter += 1;
+    return new Promise<boolean>((resolve) => {
+      set({ confirmRequest: { ...options, id: confirmCounter, resolve } });
+    });
+  },
+
+  resolveConfirm(accepted) {
+    const request = get().confirmRequest;
+    set({ confirmRequest: null });
+    request?.resolve(accepted);
   },
 
   setAutoScroll(value) {

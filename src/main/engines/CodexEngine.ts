@@ -307,6 +307,12 @@ export class CodexEngine implements ExecutionEngine {
       });
     }
 
+    // Cada turno recebe um sink próprio (com o turnId correto). O vínculo é
+    // criado uma vez por conversa, então o sink precisa ser atualizado aqui —
+    // sem isso, todos os eventos após o primeiro turno sairiam com o turnId
+    // do primeiro turno.
+    binding.sink = sink;
+
     const input = buildTurnInput(request.text, request.attachments, sink);
     const params: Record<string, unknown> = {
       threadId: binding.nativeThreadId,

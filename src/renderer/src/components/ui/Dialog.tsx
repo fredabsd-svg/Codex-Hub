@@ -10,12 +10,30 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import clsx from 'clsx';
+import { t } from '../../i18n';
 import { IconButton } from './primitives';
 import { IconClose } from './icons';
 import { pushOverlay, removeOverlay } from '../../lib/overlayStack';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Foco inicial de uma sobreposição.
+ *
+ * Ordem: elemento marcado com `data-autofocus` → primeiro campo de texto →
+ * primeiro focável → o próprio painel. Se o foco JÁ está dentro do painel
+ * (um `autoFocus` de React aplicado antes deste efeito), nada é alterado —
+ * sem isto o botão "Fechar" do cabeçalho roubava o foco do campo de busca.
+ */
+export function focusInitial(panel: HTMLElement | null): void {
+  if (!panel) return;
+  if (panel.contains(document.activeElement) && document.activeElement !== panel) return;
+  const marked = panel.querySelector<HTMLElement>('[data-autofocus]');
+  const field = panel.querySelector<HTMLElement>('input:not([disabled]):not([type="checkbox"]), textarea:not([disabled])');
+  const first = panel.querySelector<HTMLElement>(FOCUSABLE);
+  (marked ?? field ?? first ?? panel).focus();
+}
 
 export interface DialogProps {
   open: boolean;
@@ -52,8 +70,7 @@ export function Dialog({
     previousFocus.current = document.activeElement as HTMLElement | null;
     const id = pushOverlay('dialog');
     const panel = panelRef.current;
-    const first = panel?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? panel)?.focus();
+    focusInitial(panel);
     return () => {
       removeOverlay(id);
       previousFocus.current?.focus?.();
@@ -104,7 +121,7 @@ export function Dialog({
   return (
     <div
       className="ch-anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6"
-      style={{ background: 'rgba(4, 6, 8, 0.6)', backdropFilter: 'blur(2px)' }}
+      style={{ background: 'var(--scrim)', backdropFilter: 'blur(2px)' }}
       onMouseDown={(event) => {
         if (!disableBackdropClose && event.target === event.currentTarget) onClose();
       }}
@@ -131,7 +148,7 @@ export function Dialog({
               </p>
             ) : null}
           </div>
-          <IconButton label="Fechar" onClick={onClose}>
+          <IconButton label={t('common.close')} onClick={onClose}>
             <IconClose />
           </IconButton>
         </header>

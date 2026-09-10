@@ -149,7 +149,8 @@ export class ConversationService {
       await this.interrupt(conversationId);
     }
     let next = this.deps.db.conversations.update(conversationId, { archived });
-    if (row.engineId === 'codex' && row.nativeThreadId) {
+    // Só ARQUIVAR encerra a thread no motor; desarquivar mantém o vínculo.
+    if (archived && row.engineId === 'codex' && row.nativeThreadId) {
       try {
         const engine = this.deps.engineFor('codex');
         await engine.closeConversation(row);
@@ -157,7 +158,7 @@ export class ConversationService {
         logger.debug('conversations', 'Falha ao fechar thread no motor', toErrorDetail(err));
       }
     }
-    this.openedInEngine.delete(conversationId);
+    if (archived) this.openedInEngine.delete(conversationId);
     next = this.deps.db.conversations.read(conversationId) ?? next;
     this.notifyConversationsChanged();
     return conversationToSummary(next);
@@ -243,7 +244,7 @@ export class ConversationService {
     const source = this.requireRow(input.conversationId);
     const items = this.deps.db.items.list(input.conversationId);
     const cutIndex = input.fromItemId ? items.findIndex((i) => i.id === input.fromItemId) : items.length - 1;
-    const kept = cutIndex >= 0 ? items.slice(0, cutIndex + 1) : items;
+    const kept = cutIndex >= 0 ? items.slice(0, input.exclusive ? cutIndex : cutIndex + 1) : items;
 
     let nativeThreadId: string | undefined;
     if (source.engineId === 'codex' && source.nativeThreadId) {
@@ -389,14 +390,24 @@ export class ConversationService {
       engineId: parameters.engineId,
     });
     this.deps.db.drafts.clear(input.conversationId);
-    if (row.titleIsLocal && row.title === 'Nova conversa' && input.text.trim() !== '') {
+    emitTurnStarted(this.deps.bus, conversationSnapshot, turnId);
+    // Título automático na PRIMEIRA mensagem de uma conversa sem título
+    // próprio. `messageCount` é lido antes da mensagem ser anexada.
+    const untitled = row.titleIsLocal && (row.title === DEFAULT_TITLE || row.messageCount === 0);
+    if (untitled && input.text.trim() !== '') {
       this.deps.db.conversations.update(row.id, { title: deriveTitle(input.text), titleIsLocal: true });
       this.notifyConversationsChanged();
     }
     this.deps.onCatalogUse(parameters.providerId, parameters.modelId);
+    if (row.workspacePath) this.deps.workspaces.touch(row.workspacePath);
 
     const policy = engine.effectivePolicy(conversationSnapshot, row.mode);
-    const skills = await this.deps.skillsFor(engine.id, row.workspacePath).catch(() => []);
+    const discovered = await this.deps.skillsFor(engine.id, row.workspacePath).catch(() => []);
+    // A seleção de skills feita na interface é aplicada AQUI, no backend:
+    // só as skills escolhidas chegam ao motor. Sem seleção, vale o padrão.
+    const skills = parameters.skillIds
+      ? discovered.map((skill) => ({ ...skill, enabledLocally: parameters.skillIds!.includes(skill.id) }))
+      : discovered;
 
     void (async () => {
       try {
@@ -712,10 +723,53 @@ export class ConversationService {
   }
 }
 
-function deriveTitle(text: string): string {
-  const firstLine = text.split('\n').find((line) => line.trim() !== '') ?? text;
-  const trimmed = firstLine.trim();
-  return trimmed.length > 60 ? `${trimmed.slice(0, 57)}…` : trimmed || 'Nova conversa';
+const DEFAULT_TITLE = 'Nova conversa';
+const TITLE_MAX = 60;
+
+/**
+ * Deriva um título curto da primeira mensagem: ignora blocos de código e
+ * marcação Markdown, usa a primeira frase e corta em limite de palavra.
+ */
+export function deriveTitle(text: string): string {
+  const withoutFences = text.replace(/```[\s\S]*?(```|$)/g, ' ');
+  const firstLine =
+    withoutFences
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line !== '' && !/^[-*_]{3,}$/.test(line)) ?? '';
+  const plain = firstLine
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^>\s?/, '')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2')
+    .replace(/\*([^*]+)\*|_([^_]+)_/g, '$1$2')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (plain === '') return DEFAULT_TITLE;
+  // Primeira frase, quando ela cabe.
+  const sentence = /^(.{12,}?[.!?])(\s|$)/.exec(plain)?.[1];
+  const candidate = sentence && sentence.length <= TITLE_MAX ? sentence : plain;
+  const base = candidate.replace(/[.!?:;,]+$/, '').trim();
+  if (base.length <= TITLE_MAX) return capitalize(base);
+  const cut = base.slice(0, TITLE_MAX - 1);
+  const atWord = cut.lastIndexOf(' ');
+  return `${capitalize((atWord > TITLE_MAX / 2 ? cut.slice(0, atWord) : cut).trim())}…`;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toLocaleUpperCase('pt-BR') + value.slice(1);
+}
+
+function emitTurnStarted(bus: EventBus, row: ConversationRow, turnId: string): void {
+  bus.emitDomain({
+    type: 'turn/started',
+    turnId,
+    engineId: row.engineId,
+    providerId: row.providerId,
+    conversationId: row.id,
+  });
 }
 
 async function tryCodexFork(

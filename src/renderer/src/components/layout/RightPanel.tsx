@@ -9,12 +9,13 @@ import type { ConversationItem, ConversationSummary } from '@shared/domain';
 import type { FileTreeNode } from '@shared/ipc';
 import { t } from '../../i18n';
 import { errorOf, invoke } from '../../lib/api';
-import { describeUsage, formatBytes, formatContextWindow, NOT_INFORMED } from '../../lib/format';
-import { useAppStore } from '../../stores/appStore';
+import { summarizeUsage } from '@shared/conversationExport';
+import { describeUsage, formatBytes, formatContextWindow, formatNumber, NOT_INFORMED } from '../../lib/format';
+import { resolveTheme, useAppStore } from '../../stores/appStore';
 import { useCatalogStore } from '../../stores/catalogStore';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useUiStore, type RightPanelTab } from '../../stores/uiStore';
-import { Badge, EmptyState, IconButton, Spinner } from '../ui/primitives';
+import { Badge, EmptyState, IconButton, Meter, Spinner } from '../ui/primitives';
 import { CapabilityChip } from '../ui/CapabilityChip';
 import { DiffSummary, DiffView } from '../../features/diff/DiffView';
 import { MonacoViewer } from '../../features/diff/MonacoViewer';
@@ -191,11 +192,7 @@ function FilesTab({ conversation }: { conversation: ConversationSummary | null }
             {selected.binary ? (
               <EmptyState icon={<IconFile size={22} />} title={t('rightPanel.binaryFile')} body={selected.path} />
             ) : (
-              <MonacoViewer
-                value={selected.content}
-                path={selected.path}
-                theme={settings.theme === 'light' ? 'light' : 'dark'}
-              />
+              <MonacoViewer value={selected.content} path={selected.path} theme={resolveTheme(settings)} />
             )}
           </div>
         </div>
@@ -318,14 +315,64 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
   const pages = useCatalogStore((state) => state.pages);
   const items = useConversationStore((state) => (conversation ? state.items[conversation.id] : undefined));
 
+  const totals = useMemo(() => summarizeUsage(items ?? []), [items]);
+
   if (!conversation) return <EmptyState title="Nenhuma conversa selecionada." />;
 
   const model = pages[conversation.providerId]?.models.find((m) => m.id === conversation.modelId);
   const lastUsage = [...(items ?? [])].reverse().find((item) => item.usage)?.usage;
   const parameters = conversation.parameters;
+  const contextUsed = lastUsage?.promptTokens;
 
   return (
     <div className="h-full space-y-4 overflow-auto p-3 text-[12.5px]">
+      <section>
+        <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">
+          {t('rightPanel.totals')}
+        </h3>
+        <dl className="space-y-1">
+          <Row label={t('rightPanel.totalsMessages')} value={formatNumber(totals.messages)} />
+          {totals.turnsWithUsage > 0 ? (
+            <>
+              <Row label={t('rightPanel.totalsTurns')} value={formatNumber(totals.turnsWithUsage)} />
+              {totals.promptTokens !== undefined ? (
+                <Row label={t('rightPanel.totalsPrompt')} value={formatNumber(totals.promptTokens)} />
+              ) : null}
+              {totals.completionTokens !== undefined ? (
+                <Row label={t('rightPanel.totalsCompletion')} value={formatNumber(totals.completionTokens)} />
+              ) : null}
+              {totals.reasoningTokens !== undefined ? (
+                <Row label={t('rightPanel.totalsReasoning')} value={formatNumber(totals.reasoningTokens)} />
+              ) : null}
+              {totals.totalTokens !== undefined ? (
+                <Row label={t('rightPanel.totalsAll')} value={formatNumber(totals.totalTokens)} />
+              ) : null}
+              {totals.reportedCost !== undefined ? (
+                <Row label={t('rightPanel.totalsReported')} value={`${totals.currency} ${totals.reportedCost.toFixed(6)}`} />
+              ) : null}
+              {totals.estimatedCost !== undefined ? (
+                <Row label={t('rightPanel.totalsEstimated')} value={`≈ ${totals.currency} ${totals.estimatedCost.toFixed(6)}`} />
+              ) : null}
+            </>
+          ) : null}
+        </dl>
+        {totals.turnsWithUsage === 0 ? (
+          <p className="mt-1 text-[11.5px] text-[var(--text-faint)]">{t('rightPanel.totalsNone')}</p>
+        ) : totals.costIncomplete ? (
+          <p className="mt-1 text-[11.5px] leading-snug text-[var(--warning)]">{t('rightPanel.totalsIncomplete')}</p>
+        ) : null}
+        {contextUsed !== undefined && model?.contextWindow ? (
+          <div className="mt-2">
+            <Meter
+              value={contextUsed}
+              max={model.contextWindow}
+              label={t('rightPanel.contextUsage')}
+              tone={contextUsed / model.contextWindow > 0.85 ? 'warning' : 'accent'}
+            />
+          </div>
+        ) : null}
+      </section>
+
       <section>
         <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">
           {t('rightPanel.effectiveParameters')}
@@ -391,7 +438,7 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
 
       <section>
         <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">
-          Uso do último turno
+          {t('rightPanel.lastTurnUsage')}
         </h3>
         <ul className="space-y-0.5 text-[var(--text-muted)]">
           {describeUsage(lastUsage).map((line) => (

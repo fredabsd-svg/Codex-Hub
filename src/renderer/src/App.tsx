@@ -2,8 +2,8 @@
  * Composição da interface.
  *
  * Layout: barra lateral · cabeçalho · conversa · painel direito · barra de
- * status. Painéis secundários recolhem em janelas menores e o composer é
- * sempre preservado.
+ * status. Painéis secundários recolhem em janelas menores (sem alterar a
+ * preferência salva) e o composer é sempre preservado.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,7 @@ import { Header } from './components/layout/Header';
 import { RightPanel } from './components/layout/RightPanel';
 import { StatusBar } from './components/layout/StatusBar';
 import { ToastRegion } from './components/ui/Toast';
+import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Button, Spinner } from './components/ui/primitives';
 import { MessageList } from './features/chat/MessageList';
 import { Composer, type ComposerHandle } from './features/chat/Composer';
@@ -160,6 +161,11 @@ export function App() {
     composerRef.current?.focus();
   }, [settings, providers, createConversation, openDialog, loadCatalog]);
 
+  const focusComposer = useCallback(() => {
+    // Após uma troca de conversa o composer é remontado; espera o quadro.
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }, []);
+
   // Recolhe painéis secundários em janelas menores, preservando o composer.
   const narrow = windowWidth < NARROW_BREAKPOINT;
   const veryNarrow = windowWidth < VERY_NARROW_BREAKPOINT;
@@ -186,7 +192,10 @@ export function App() {
 
   useHotkeys({
     newConversation: () => void handleNewConversation(),
-    commandPalette: () => openDialog('palette'),
+    commandPalette: () => {
+      if (dialog === 'palette') closeDialog();
+      else openDialog('palette');
+    },
     chooseWorkspace: () => openDialog('workspaces'),
     attachFiles: () => composerRef.current?.attach(),
     send: () => composerRef.current?.submit(),
@@ -292,12 +301,16 @@ export function App() {
             <div className="ch-resizer" {...sidebarResizer.handleProps('Largura da barra lateral')} />
           </>
         ) : (
-          <Sidebar onNewConversation={() => void handleNewConversation()} />
+          <Sidebar onNewConversation={() => void handleNewConversation()} forceCollapsed={veryNarrow} />
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
           <Header conversation={conversation} />
-          <MessageList conversation={conversation} />
+          <MessageList
+            conversation={conversation}
+            onNewConversation={() => void handleNewConversation()}
+            onFocusComposer={focusComposer}
+          />
           <Composer
             conversation={conversation}
             registerHandle={(handle) => {
@@ -316,6 +329,7 @@ export function App() {
 
       <StatusBar conversation={conversation} />
       <ToastRegion />
+      <ConfirmDialog />
 
       <OnboardingDialog open={dialog === 'onboarding'} onClose={closeDialog} />
       <CatalogDialog open={dialog === 'catalog'} onClose={closeDialog} />

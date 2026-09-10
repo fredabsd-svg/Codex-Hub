@@ -179,6 +179,8 @@ export function installFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
     workspaces: [],
     conversations,
+    modelFavorites: [],
+    recentModels: [],
     onboardingCompleted: options.onboardingCompleted ?? true,
     notices: options.notices ?? [],
   };

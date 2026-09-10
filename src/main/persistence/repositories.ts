@@ -169,10 +169,13 @@ export class ItemRepository {
       this.store.put(TABLES.items, row);
       const conversation = this.conversations.read(item.conversationId);
       if (conversation) {
+        // Só mensagens de pessoa e assistente contam como "mensagens":
+        // avisos, resumos, ferramentas e comandos são itens técnicos.
+        const isMessage = row.kind === 'userMessage' || row.kind === 'agentMessage';
         const preview = row.text?.slice(0, 160) ?? conversation.lastMessagePreview;
         this.conversations.update(item.conversationId, {
-          messageCount: conversation.messageCount + 1,
-          lastMessagePreview: row.kind === 'userMessage' || row.kind === 'agentMessage' ? preview : conversation.lastMessagePreview,
+          messageCount: conversation.messageCount + (isMessage ? 1 : 0),
+          lastMessagePreview: isMessage ? preview : conversation.lastMessagePreview,
         });
       }
     });

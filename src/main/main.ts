@@ -96,6 +96,12 @@ async function bootstrap(): Promise<void> {
       context.bus.setSender((channel, payload) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
       });
+      // Sem isto, após o segundo fechamento `mainWindow` apontaria para uma
+      // janela destruída e o guard de IPC recusaria todas as chamadas.
+      mainWindow.on('closed', () => {
+        mainWindow = null;
+        context?.bus.setSender(null);
+      });
     }
   });
 }

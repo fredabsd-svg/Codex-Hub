@@ -50,6 +50,8 @@ export interface DirectEngineDeps {
   approvals: ApprovalBroker;
   git: GitService;
   limits(): { maxSteps: number; maxDurationMs: number; maxResultBytes: number };
+  /** Instruções personalizadas da pessoa, anexadas ao prompt de sistema. */
+  customInstructions?(): string | undefined;
 }
 
 export class DirectEngine implements ExecutionEngine {
@@ -193,6 +195,9 @@ export class DirectEngine implements ExecutionEngine {
         const collected: ProviderToolCall[] = [];
         let reasoningText = '';
         let assistantText = '';
+        // Uso DESTE passo: é o que fica registrado na mensagem. O acumulado
+        // do turno vai para `sink.usage`.
+        let stepUsage: TokenUsage | undefined;
 
         const chatRequest: ProviderChatRequest = {
           modelId: parameters.modelId,
@@ -254,6 +259,7 @@ export class DirectEngine implements ExecutionEngine {
               collected.push(...event.calls);
               break;
             case 'usage':
+              stepUsage = mergeUsage(stepUsage, estimateCost(event.usage, model ?? undefined));
               totalUsage = mergeUsage(totalUsage, estimateCost(event.usage, model ?? undefined));
               if (totalUsage) sink.usage(totalUsage);
               break;
@@ -274,7 +280,7 @@ export class DirectEngine implements ExecutionEngine {
           sink.itemCompleted(messageItemId, {
             text: assistantText,
             status: 'completed',
-            usage: totalUsage,
+            usage: stepUsage,
             effectiveUpstream,
           });
         }
@@ -479,6 +485,14 @@ export class DirectEngine implements ExecutionEngine {
     }
     if (request.parameters.personality) {
       lines.push('', `Estilo pedido: ${request.parameters.personality}.`);
+    }
+    const custom = this.deps.customInstructions?.()?.trim();
+    if (custom) {
+      lines.push(
+        '',
+        'Instruções personalizadas da pessoa (definidas em Configurações). Elas orientam estilo e conteúdo, mas não concedem novas capacidades nem anulam as regras acima:',
+        custom,
+      );
     }
     return lines.join('\n');
   }

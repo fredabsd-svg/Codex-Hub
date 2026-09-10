@@ -4,12 +4,18 @@
  * Regras específicas implementadas:
  *  - `Esc` fecha primeiro menus e diálogos; só interrompe o turno ativo quando
  *    nenhuma sobreposição está aberta;
+ *  - com um diálogo ou menu aberto, os atalhos globais ficam inativos (exceto
+ *    a paleta, que alterna): sem isto, Ctrl+Enter enviava a mensagem por trás
+ *    das configurações e Ctrl+O abria o seletor nativo sobre um modal;
  *  - nada é enviado durante composição de texto por IME (`isComposing`);
  *  - atalhos com Ctrl não disparam quando o alvo é um campo de texto e o atalho
- *    conflitaria com a edição (por exemplo, Ctrl+A).
+ *    conflitaria com a edição (por exemplo, Ctrl+B e Ctrl+J no editor).
+ *
+ * Os handlers ficam em uma ref: o ouvinte é registrado UMA vez, e não a cada
+ * render do App.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { blockingDepth } from '../lib/overlayStack';
 
 export interface HotkeyHandlers {
@@ -31,8 +37,12 @@ function isTextEntry(target: EventTarget | null): boolean {
 }
 
 export function useHotkeys(handlers: HotkeyHandlers): void {
+  const ref = useRef(handlers);
+  ref.current = handlers;
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      const current = ref.current;
       // Nunca agir durante composição por IME.
       if (event.isComposing || event.keyCode === 229) return;
 
@@ -41,7 +51,7 @@ export function useHotkeys(handlers: HotkeyHandlers): void {
         // e nada está aberto, a ação é interromper o turno ativo.
         if (blockingDepth() === 0) {
           event.preventDefault();
-          handlers.escape();
+          current.escape();
         }
         return;
       }
@@ -51,48 +61,53 @@ export function useHotkeys(handlers: HotkeyHandlers): void {
 
       const key = event.key.toLowerCase();
 
+      if (key === 'k') {
+        event.preventDefault();
+        current.commandPalette();
+        return;
+      }
+
+      // Com um diálogo ou menu aberto, os demais atalhos globais não agem.
+      if (blockingDepth() > 0) return;
+
       if (key === 'enter') {
         event.preventDefault();
-        handlers.send();
+        current.send();
         return;
       }
       if (key === 'n' && !event.shiftKey) {
         event.preventDefault();
-        handlers.newConversation();
-        return;
-      }
-      if (key === 'k') {
-        event.preventDefault();
-        handlers.commandPalette();
+        current.newConversation();
         return;
       }
       if (key === 'o' && !event.shiftKey) {
         event.preventDefault();
-        handlers.chooseWorkspace();
+        current.chooseWorkspace();
         return;
       }
       if (key === 'o' && event.shiftKey) {
         event.preventDefault();
-        handlers.attachFiles();
+        current.attachFiles();
         return;
       }
       if (key === ',') {
         event.preventDefault();
-        handlers.openSettings();
+        current.openSettings();
         return;
       }
-      if (key === 'b' && handlers.toggleSidebar && !isTextEntry(event.target)) {
+      if (key === 'b' && current.toggleSidebar && !isTextEntry(event.target)) {
         event.preventDefault();
-        handlers.toggleSidebar();
+        current.toggleSidebar();
         return;
       }
-      if (key === 'j' && handlers.toggleRightPanel) {
+      // Ctrl+J não edita texto em campo algum: vale também com o composer focado.
+      if (key === 'j' && current.toggleRightPanel) {
         event.preventDefault();
-        handlers.toggleRightPanel();
+        current.toggleRightPanel();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlers]);
+  }, []);
 }

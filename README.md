@@ -43,7 +43,7 @@ Verificações:
 
 ```bash
 npm run verify       # typecheck (main + renderer) + lint + testes
-npm run test         # 346 testes unitários, de integração e de renderer
+npm run test         # 376 testes unitários, de integração e de renderer
 npm run test:e2e     # fluxos no Electron (requer `npm run build` antes)
 npm run test:live    # somente com credencial real; ignorado sem as variáveis
 ```
@@ -82,20 +82,43 @@ instalação em si só pode ser verificada no Windows.
 4. Opcional: vincule um workspace (Ctrl+O) para habilitar os modos Planejar e
    Executar.
 
+## No dia a dia
+
+- **Paleta (Ctrl+K)** — ações com atalho visível, ações da conversa atual
+  (modo, interromper, favoritar, ramificar, exportar, arquivar), conversas,
+  **busca no conteúdo das mensagens**, modelos e workspaces.
+- **Exportar** — cada conversa pode ser salva em Markdown ou JSON, ou copiada
+  como Markdown (menu `⋯` no cabeçalho, botão direito na barra lateral ou pela
+  paleta). Uso e custo só aparecem quando o provedor informou; estimativas são
+  rotuladas.
+- **Editar e reenviar** — em uma mensagem sua, cria uma ramificação que termina
+  antes dela e coloca o texto no composer. A conversa original fica intacta.
+- **Totais** — tokens e custo da conversa na barra de status e em
+  *Painel de contexto › Contexto*, com a ocupação da janela de contexto.
+- **Blocos de código** — realce de sintaxe local (sem HTML), numeração de
+  linhas, quebra de linha e copiar.
+- **Configurações › Conversa** — Enter envia (Shift+Enter quebra linha),
+  resumos de raciocínio, largura de leitura e **instruções personalizadas**
+  anexadas ao prompt do motor direto.
+- **Configurações › Aparência** — tamanho da interface (zoom real da janela),
+  densidade, tema e redução de movimento.
+
 ## Atalhos
 
 | Atalho | Ação |
 | --- | --- |
 | `Ctrl+N` | Nova conversa |
-| `Ctrl+K` | Paleta de comandos e busca |
+| `Ctrl+K` | Paleta de comandos e busca (alterna) |
 | `Ctrl+O` | Escolher workspace |
 | `Ctrl+Shift+O` | Anexar arquivos |
-| `Ctrl+Enter` | Enviar |
+| `Ctrl+Enter` | Enviar (ou `Enter`, com a preferência ligada) |
 | `Ctrl+,` | Configurações |
 | `Ctrl+B` / `Ctrl+J` | Recolher barra lateral / painel direito |
 | `Esc` | Fecha menus e diálogos. Só interrompe o turno quando nada está aberto. |
 
-Nada é enviado enquanto há composição de texto por IME em andamento.
+Com um diálogo aberto, os atalhos globais ficam inativos (exceto `Ctrl+K` e
+`Esc`). Nada é enviado enquanto há composição de texto por IME em andamento.
+A lista completa fica em *Configurações › Atalhos*.
 
 ## Onde ficam os dados
 

@@ -20,6 +20,7 @@ import {
 } from 'react';
 import clsx from 'clsx';
 import { pushOverlay, removeOverlay } from '../../lib/overlayStack';
+import { focusInitial } from './Dialog';
 
 type Align = 'start' | 'center' | 'end';
 type Side = 'bottom' | 'top';
@@ -49,13 +50,15 @@ export function Popover({
   className,
 }: PopoverProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const open = controlledOpen ?? uncontrolledOpen;
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : uncontrolledOpen;
   const setOpen = useCallback(
     (next: boolean) => {
-      setUncontrolledOpen(next);
+      // Em modo controlado, quem decide é o pai (via onOpenChange).
+      if (!controlled) setUncontrolledOpen(next);
       onOpenChange?.(next);
     },
-    [onOpenChange],
+    [controlled, onOpenChange],
   );
 
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -94,11 +97,7 @@ export function Popover({
     }
     const id = pushOverlay('popover');
     reposition();
-    const panel = panelRef.current;
-    const focusable = panel?.querySelector<HTMLElement>(
-      'input, button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    (focusable ?? panel)?.focus();
+    focusInitial(panelRef.current);
 
     const onScroll = (): void => reposition();
     window.addEventListener('resize', onScroll);

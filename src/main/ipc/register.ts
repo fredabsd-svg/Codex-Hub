@@ -5,9 +5,10 @@
  * schema de validação e conversão para DTOs seguros.
  */
 
-import { clipboard, dialog, shell, type BrowserWindow, type WebContents } from 'electron';
-import { basename } from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
+import { app, clipboard, dialog, shell, type BrowserWindow, type WebContents } from 'electron';
+import { basename, join } from 'node:path';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { exportFileName, renderConversationExport, type ConversationExportFormat } from '../../shared/conversationExport';
 import type {
   ApprovalRequest,
   CodexAccountState,
@@ -71,6 +72,8 @@ export function registerIpc(options: RegisterIpcOptions): void {
 
   on('app:getBootstrap', async (): Promise<BootstrapPayload> => {
     const settings = ctx.settings.get();
+    // A janela pode ter sido criada depois do registro dos handlers.
+    applyUiScale(settings.fontScale);
     // Localiza o Codex sem bloquear a interface por falta dele.
     const codex = await ctx.codexRuntime.locate().catch((err) => {
       logger.debug('ipc', 'Localização do Codex falhou', toErrorDetail(err));
@@ -80,20 +83,39 @@ export function registerIpc(options: RegisterIpcOptions): void {
       appName: options.appName,
       appVersion: options.appVersion,
       platform: process.platform,
-      isPackaged: process.env.NODE_ENV === 'production',
+      isPackaged: app.isPackaged,
       settings,
       providers: ctx.providers.descriptors(),
       connections: ctx.providers.allConnections(),
       codex,
       workspaces: await ctx.workspaces.list(),
       conversations: ctx.conversations.list(true),
+      modelFavorites: ctx.catalog.favorites(),
+      recentModels: ctx.catalog.recents(),
       onboardingCompleted: ctx.settings.isOnboardingCompleted(),
       notices: ctx.notices,
     };
   });
 
   on('settings:get', () => ctx.settings.get());
-  on('settings:update', (patch: Parameters<typeof ctx.settings.update>[0]) => ctx.settings.update(patch));
+  on('settings:update', (patch: Parameters<typeof ctx.settings.update>[0]) => {
+    const previous = ctx.settings.get();
+    const next = ctx.settings.update(patch);
+    if (next.fontScale !== previous.fontScale) applyUiScale(next.fontScale);
+    return next;
+  });
+
+  /**
+   * "Tamanho da interface" é o zoom da janela: escala textos, ícones e
+   * espaçamentos de forma consistente, o que uma variável de fonte não faz
+   * com tamanhos em px.
+   */
+  const applyUiScale = (scale: number): void => {
+    const window = options.getMainWindow();
+    if (!window || window.isDestroyed()) return;
+    window.webContents.setZoomFactor(Math.min(1.5, Math.max(0.85, scale)));
+  };
+  applyUiScale(ctx.settings.get().fontScale);
 
   /* ------------------------------------------------------------------ *
    * Provedores
@@ -344,6 +366,31 @@ export function registerIpc(options: RegisterIpcOptions): void {
   on('conversations:search', (input: { query: string; limit?: number }) =>
     ctx.conversations.search(input.query, input.limit),
   );
+  on('conversations:export', async (input: { conversationId: string; format: ConversationExportFormat }) => {
+    const conversation = ctx.conversations.read(input.conversationId);
+    if (!conversation) throw appError('validation', { message: 'A conversa não foi encontrada.' });
+    const items = ctx.conversations.items(input.conversationId);
+    const content = renderConversationExport(input.format, {
+      conversation,
+      items,
+      app: { name: options.appName, version: options.appVersion },
+    });
+    const window = options.getMainWindow();
+    const suggested = exportFileName(conversation, input.format);
+    const result = await dialog.showSaveDialog(window ?? undefined!, {
+      title: 'Exportar conversa',
+      defaultPath: join(app.getPath('documents'), suggested),
+      buttonLabel: 'Exportar',
+      filters:
+        input.format === 'json'
+          ? [{ name: 'JSON', extensions: ['json'] }]
+          : [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (result.canceled || !result.filePath) return { path: null };
+    await writeFile(result.filePath, content, 'utf8');
+    logger.info('ipc', 'Conversa exportada', { format: input.format });
+    return { path: result.filePath };
+  });
   on('conversations:saveDraft', (input: { conversationId: string; text: string; attachmentIds: string[] }) => {
     ctx.conversations.saveDraft(input.conversationId, input.text, input.attachmentIds);
     return { saved: true };

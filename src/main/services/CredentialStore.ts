@@ -110,6 +110,12 @@ export class CredentialStore {
   }
 
   private persist(): void {
+    if (!this.available) {
+      // Sem proteção do sistema, o arquivo em disco não foi lido nesta sessão
+      // (a memória está vazia). Regravar a partir da memória APAGARIA as
+      // credenciais salvas em sessões anteriores — por isso, nada é tocado.
+      return;
+    }
     const entries: PersistedFile['entries'] = [];
     for (const { secret, meta } of this.memory.values()) {
       if (!meta.persisted) continue;

@@ -24,7 +24,9 @@ import type {
   TurnParameters,
 } from '@shared/domain';
 import type { DomainEvent } from '@shared/events';
-import type { CreateConversationInput, SendTurnInput } from '@shared/ipc';
+import type { ConversationExportFormat, CreateConversationInput, SendTurnInput } from '@shared/ipc';
+import { renderConversationMarkdown } from '@shared/conversationExport';
+import { t } from '../i18n';
 import { errorOf, invoke } from '../lib/api';
 import { useUiStore } from './uiStore';
 
@@ -61,7 +63,11 @@ interface ConversationState {
   archive(conversationId: string, archived: boolean): Promise<void>;
   remove(conversationId: string): Promise<void>;
   setFavorite(conversationId: string, favorite: boolean): Promise<void>;
-  fork(conversationId: string, fromItemId?: string): Promise<ConversationSummary | null>;
+  fork(conversationId: string, fromItemId?: string, options?: { exclusive?: boolean; silent?: boolean }): Promise<ConversationSummary | null>;
+  /** Exporta a conversa para um arquivo escolhido pela pessoa. */
+  exportConversation(conversationId: string, format: ConversationExportFormat): Promise<void>;
+  /** Copia a conversa inteira como Markdown para a área de transferência. */
+  copyAsMarkdown(conversationId: string): Promise<void>;
   setParameters(conversationId: string, parameters: Partial<TurnParameters>): Promise<void>;
   setMode(conversationId: string, mode: OperationMode): Promise<void>;
 
@@ -293,20 +299,54 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       }
     },
 
-    async fork(conversationId, fromItemId) {
+    async fork(conversationId, fromItemId, options) {
       try {
-        const created = await invoke('conversations:fork', { conversationId, fromItemId });
+        const created = await invoke('conversations:fork', {
+          conversationId,
+          fromItemId,
+          exclusive: options?.exclusive,
+        });
         set((state) => ({ conversations: [created, ...state.conversations] }));
         await get().setActive(created.id);
-        useUiStore.getState().pushToast({
-          tone: 'info',
-          title: 'Ramificação criada',
-          body: 'A conversa original permanece intacta. O histórico foi copiado para a nova ramificação.',
-        });
+        if (!options?.silent) {
+          useUiStore.getState().pushToast({
+            tone: 'info',
+            title: 'Ramificação criada',
+            body: 'A conversa original permanece intacta. O histórico foi copiado para a nova ramificação.',
+          });
+        }
         return created;
       } catch (err) {
         useUiStore.getState().pushError(errorOf(err), 'Não foi possível ramificar');
         return null;
+      }
+    },
+
+    async exportConversation(conversationId, format) {
+      try {
+        const result = await invoke('conversations:export', { conversationId, format });
+        if (result.path) {
+          useUiStore.getState().pushToast({
+            tone: 'success',
+            title: t('chat.exported'),
+            body: t('chat.exportedBody', { path: result.path }),
+          });
+        }
+      } catch (err) {
+        useUiStore.getState().pushError(errorOf(err), 'Não foi possível exportar a conversa');
+      }
+    },
+
+    async copyAsMarkdown(conversationId) {
+      const conversation = get().conversations.find((c) => c.id === conversationId);
+      if (!conversation) return;
+      try {
+        const items = get().items[conversationId] ?? (await invoke('conversations:items', { conversationId }));
+        const text = renderConversationMarkdown({ conversation, items });
+        await invoke('clipboard:writeText', { text });
+        useUiStore.getState().pushToast({ tone: 'success', title: t('chat.copiedConversation') });
+      } catch (err) {
+        useUiStore.getState().pushError(errorOf(err), 'Não foi possível copiar a conversa');
       }
     },
 
@@ -420,9 +460,14 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     },
 
     async interrupt(conversationId) {
+      const current = get().runtime[conversationId];
+      const wasActive = current?.status === 'running' || current?.status === 'awaitingApproval';
+      // Retorno visual imediato: o processo principal confirma (ou corrige) por evento.
+      if (wasActive) patchRuntime(conversationId, { status: 'interrupting' });
       try {
         await invoke('turn:interrupt', { conversationId });
       } catch (err) {
+        if (wasActive) patchRuntime(conversationId, { status: current.status });
         useUiStore.getState().pushError(errorOf(err), 'Não foi possível interromper');
       }
     },

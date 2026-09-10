@@ -26,7 +26,8 @@ export function ToastRegion() {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed bottom-11 right-4 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-2"
+      // No canto superior direito: não cobre o composer nem o botão de enviar.
+      className="pointer-events-none fixed right-4 top-14 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-2"
     >
       {toasts.map((toast) => (
         <ToastCard key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />

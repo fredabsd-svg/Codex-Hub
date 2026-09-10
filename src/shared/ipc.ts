@@ -35,6 +35,7 @@ import type {
   AttachmentRef,
 } from './domain';
 import type { AppEvent, DomainEvent } from './events';
+import type { ConversationExportFormat } from './conversationExport';
 
 export const IPC_INVOKE_CHANNELS = [
   'app:getBootstrap',
@@ -78,6 +79,7 @@ export const IPC_INVOKE_CHANNELS = [
   'conversations:fork',
   'conversations:setFavorite',
   'conversations:search',
+  'conversations:export',
   'conversations:saveDraft',
   'conversations:readDraft',
   'conversations:setParameters',
@@ -137,6 +139,10 @@ export interface BootstrapPayload {
   codex: CodexRuntimeInfo;
   workspaces: WorkspaceSummary[];
   conversations: ConversationSummary[];
+  /** Favoritos do catálogo (`providerId::modelId`), persistidos entre sessões. */
+  modelFavorites: string[];
+  /** Modelos usados recentemente (`providerId::modelId`), do mais recente ao mais antigo. */
+  recentModels: string[];
   onboardingCompleted: boolean;
   /** Avisos de inicialização em pt-BR (ex.: safeStorage indisponível). */
   notices: Array<{ level: 'info' | 'warn' | 'error'; message: string; action?: string }>;
@@ -191,8 +197,10 @@ export interface SendTurnInput {
 
 export interface ForkConversationInput {
   conversationId: ConversationId;
-  /** Ramifica a partir deste item (inclusive). */
+  /** Ramifica a partir deste item (inclusive, salvo `exclusive`). */
   fromItemId?: string;
+  /** Quando true, a ramificação termina ANTES de `fromItemId` (editar e reenviar). */
+  exclusive?: boolean;
   title?: string;
 }
 
@@ -228,6 +236,8 @@ export interface SearchConversationsResult {
   conversations: ConversationSummary[];
   matches: Array<{ conversationId: ConversationId; itemId: string; snippet: string }>;
 }
+
+export type { ConversationExportFormat };
 
 export interface CapabilityProbeInput {
   providerId: ProviderId;
@@ -288,6 +298,11 @@ export interface IpcContract {
     output: ConversationSummary;
   };
   'conversations:search': { input: { query: string; limit?: number }; output: SearchConversationsResult };
+  'conversations:export': {
+    input: { conversationId: ConversationId; format: ConversationExportFormat };
+    /** `path` é null quando a pessoa cancelou o diálogo de salvar. */
+    output: { path: string | null };
+  };
   'conversations:saveDraft': {
     input: { conversationId: ConversationId; text: string; attachmentIds: string[] };
     output: { saved: boolean };

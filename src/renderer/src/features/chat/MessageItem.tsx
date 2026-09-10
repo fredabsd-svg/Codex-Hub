@@ -4,14 +4,17 @@
  * Cada tipo tem uma apresentação própria: mensagem, resumo de raciocínio,
  * plano, comando, ferramenta, alteração de arquivo, aviso e erro.
  * Itens técnicos podem ser expandidos sem interromper a leitura.
+ *
+ * O componente é memoizado: durante o streaming o store substitui apenas o
+ * item que recebeu texto, e os demais não são renderizados de novo.
  */
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import type { AttachmentDelivery, ConversationItem, PlanStep } from '@shared/domain';
 import { t } from '../../i18n';
 import { invoke } from '../../lib/api';
-import { describeUsage, formatBytes, formatDuration, formatTime } from '../../lib/format';
+import { describeUsage, formatBytes, formatDuration, formatNumber, formatTime } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 import { Badge, IconButton, Spinner } from '../../components/ui/primitives';
 import { Tooltip } from '../../components/ui/Popover';
@@ -23,6 +26,7 @@ import {
   IconCheck,
   IconCopy,
   IconDiff,
+  IconEdit,
   IconFile,
   IconFork,
   IconInfo,
@@ -31,20 +35,23 @@ import {
   IconTerminal,
 } from '../../components/ui/icons';
 
-export function MessageItem({
-  item,
-  onFork,
-  developerMode,
-}: {
+export interface MessageItemProps {
   item: ConversationItem;
+  /** Ramifica a conversa a partir deste item (inclusive). */
   onFork(itemId: string): void;
+  /** Copia o texto para o composer em uma ramificação que termina antes deste item. */
+  onEdit?(item: ConversationItem): void;
   developerMode: boolean;
-}) {
+  /** Nome de exibição do modelo, quando o catálogo o conhece. */
+  modelLabel?: string;
+}
+
+function MessageItemInner({ item, onFork, onEdit, developerMode, modelLabel }: MessageItemProps) {
   switch (item.kind) {
     case 'userMessage':
-      return <UserMessage item={item} onFork={onFork} />;
+      return <UserMessage item={item} onFork={onFork} onEdit={onEdit} />;
     case 'agentMessage':
-      return <AgentMessage item={item} onFork={onFork} />;
+      return <AgentMessage item={item} onFork={onFork} modelLabel={modelLabel} />;
     case 'reasoningSummary':
       return <ReasoningBlock item={item} />;
     case 'plan':
@@ -63,6 +70,8 @@ export function MessageItem({
   }
 }
 
+export const MessageItem = memo(MessageItemInner);
+
 /* ------------------------------------------------------------------ *
  * Mensagens
  * ------------------------------------------------------------------ */
@@ -73,16 +82,33 @@ function useOpenLink(): (url: string) => void {
   };
 }
 
-function UserMessage({ item, onFork }: { item: ConversationItem; onFork(itemId: string): void }) {
-  const onOpenLink = useOpenLink();
+function useCopy(text: string): { copied: boolean; copy(): void } {
   const [copied, setCopied] = useState(false);
+  return {
+    copied,
+    copy: () => {
+      void invoke('clipboard:writeText', { text });
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    },
+  };
+}
+
+function UserMessage({
+  item,
+  onFork,
+  onEdit,
+}: {
+  item: ConversationItem;
+  onFork(itemId: string): void;
+  onEdit?(item: ConversationItem): void;
+}) {
+  const onOpenLink = useOpenLink();
+  const { copied, copy } = useCopy(item.text ?? '');
 
   return (
-    <article className="ch-anim-fade group flex flex-col items-end gap-1.5" aria-label={t('chat.you')}>
-      <div
-        className="ch-prose w-fit rounded-[var(--radius-lg)] border px-3.5 py-2.5"
-        style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
-      >
+    <article className="ch-anim-fade group flex flex-col items-end gap-1" aria-label={t('chat.you')}>
+      <div className="ch-bubble-user ch-prose w-fit px-3.5 py-2.5">
         <div className="text-[13.5px] leading-relaxed text-[var(--text)]">
           {renderMarkdown(item.text ?? '', {
             onOpenLink,
@@ -90,7 +116,7 @@ function UserMessage({ item, onFork }: { item: ConversationItem; onFork(itemId: 
           })}
         </div>
         {item.attachments && item.attachments.length > 0 ? (
-          <ul className="mt-2 flex flex-wrap gap-1.5 border-t pt-2">
+          <ul className="mt-2 flex flex-wrap gap-1.5 border-t pt-2" style={{ borderColor: 'var(--bubble-user-border)' }}>
             {item.attachments.map((attachment) => (
               <li key={attachment.id}>
                 <Tooltip
@@ -113,19 +139,20 @@ function UserMessage({ item, onFork }: { item: ConversationItem; onFork(itemId: 
           </ul>
         ) : null}
       </div>
-      <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <span className="text-[10.5px] text-[var(--text-faint)]">{formatTime(item.createdAt)}</span>
-        <IconButton
-          size="sm"
-          label={t('chat.copyMessage')}
-          onClick={() => {
-            void invoke('clipboard:writeText', { text: item.text ?? '' });
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          }}
-        >
-          {copied ? <IconCheck size={12} className="text-[var(--success)]" /> : <IconCopy size={12} />}
-        </IconButton>
+      <div className="flex items-center gap-0.5 pr-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <span className="mr-1 text-[10.5px] text-[var(--text-faint)]">{formatTime(item.createdAt)}</span>
+        <Tooltip content={t('chat.copyMessage')}>
+          <IconButton size="sm" label={t('chat.copyMessage')} onClick={copy}>
+            {copied ? <IconCheck size={12} className="text-[var(--success)]" /> : <IconCopy size={12} />}
+          </IconButton>
+        </Tooltip>
+        {onEdit ? (
+          <Tooltip content={t('chat.editResendHint')}>
+            <IconButton size="sm" label={t('chat.editResend')} onClick={() => onEdit(item)}>
+              <IconEdit size={12} />
+            </IconButton>
+          </Tooltip>
+        ) : null}
         <Tooltip content={t('chat.retryCreatesFork')}>
           <IconButton size="sm" label={t('chat.retry')} onClick={() => onFork(item.id)}>
             <IconFork size={12} />
@@ -136,63 +163,86 @@ function UserMessage({ item, onFork }: { item: ConversationItem; onFork(itemId: 
   );
 }
 
-function AgentMessage({ item, onFork }: { item: ConversationItem; onFork(itemId: string): void }) {
+function AgentMessage({
+  item,
+  onFork,
+  modelLabel,
+}: {
+  item: ConversationItem;
+  onFork(itemId: string): void;
+  modelLabel?: string;
+}) {
   const onOpenLink = useOpenLink();
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy(item.text ?? '');
   const streaming = item.status === 'streaming';
+  const usage = item.usage;
+  const cost =
+    usage?.reportedCost !== undefined
+      ? { label: t('chat.costReported'), value: usage.reportedCost, estimated: false }
+      : usage?.estimatedCost !== undefined
+        ? { label: t('chat.costEstimated'), value: usage.estimatedCost, estimated: true }
+        : null;
 
   return (
-    <article className="ch-anim-fade group flex flex-col gap-1.5" aria-label={t('chat.assistant')}>
-      <div className="ch-prose text-[13.5px] leading-relaxed text-[var(--text)]">
-        {renderMarkdown(item.text ?? '', {
-          onOpenLink,
-          renderCodeBlock: (code, language, index) => <CodeBlock key={index} code={code} language={language} />,
-        })}
-        {streaming ? (
-          <span
-            aria-hidden="true"
-            className="ch-pulse ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px]"
-            style={{ background: 'var(--accent)' }}
-          />
-        ) : null}
-      </div>
-      <div className="flex items-center gap-2 text-[10.5px] text-[var(--text-faint)]">
-        <span>{formatTime(item.createdAt)}</span>
-        {item.modelId ? <span className="ch-mono truncate">{item.modelId}</span> : null}
-        {item.effectiveUpstream ? (
-          <Tooltip content={`${t('chat.upstreamLabel')}: ${item.effectiveUpstream}`}>
-            <span tabIndex={0} className="inline-flex">
-              <Badge tone="info">{item.effectiveUpstream}</Badge>
+    <article className="ch-anim-fade group flex gap-3" aria-label={t('chat.assistant')}>
+      <span className="ch-avatar mt-0.5" aria-hidden="true">
+        <IconSpark size={13} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2 text-[11.5px] text-[var(--text-faint)]">
+          <span className="font-medium text-[var(--text-muted)]">{t('chat.assistant')}</span>
+          {item.modelId ? (
+            <span className="ch-mono truncate" title={item.modelId}>
+              {modelLabel ?? item.modelId}
             </span>
-          </Tooltip>
-        ) : null}
-        {item.usage ? (
-          <Tooltip content={describeUsage(item.usage).join('\n')}>
-            <span tabIndex={0} className="inline-flex">
-              <Badge tone="neutral">
-                {item.usage.totalTokens !== undefined ? `${item.usage.totalTokens} tokens` : 'uso'}
-              </Badge>
-            </span>
-          </Tooltip>
-        ) : null}
-        <span className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-          <IconButton
-            size="sm"
-            label={t('chat.copyMessage')}
-            onClick={() => {
-              void invoke('clipboard:writeText', { text: item.text ?? '' });
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
-            }}
-          >
-            {copied ? <IconCheck size={12} className="text-[var(--success)]" /> : <IconCopy size={12} />}
-          </IconButton>
-          <Tooltip content={t('chat.editCreatesFork')}>
-            <IconButton size="sm" label={t('sidebar.fork')} onClick={() => onFork(item.id)}>
-              <IconFork size={12} />
-            </IconButton>
-          </Tooltip>
-        </span>
+          ) : null}
+          <span>{formatTime(item.createdAt)}</span>
+          {streaming ? <Spinner size={11} /> : null}
+        </div>
+        <div className="ch-prose text-[13.5px] leading-relaxed text-[var(--text)]">
+          {renderMarkdown(item.text ?? '', {
+            onOpenLink,
+            renderCodeBlock: (code, language, index) => <CodeBlock key={index} code={code} language={language} />,
+          })}
+          {streaming ? (
+            <span
+              aria-hidden="true"
+              className="ch-pulse ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px]"
+              style={{ background: 'var(--accent)' }}
+            />
+          ) : null}
+        </div>
+        <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-[var(--text-faint)]">
+          {item.effectiveUpstream ? (
+            <Tooltip content={`${t('chat.upstreamLabel')}: ${item.effectiveUpstream}`}>
+              <span tabIndex={0} className="inline-flex">
+                <Badge tone="info">{item.effectiveUpstream}</Badge>
+              </span>
+            </Tooltip>
+          ) : null}
+          {usage ? (
+            <Tooltip content={describeUsage(usage).join('\n')}>
+              <span tabIndex={0} className="inline-flex">
+                <Badge tone="neutral">
+                  {usage.totalTokens !== undefined ? t('chat.tokens', { count: formatNumber(usage.totalTokens) }) : 'uso'}
+                  {cost ? ` · ${cost.estimated ? '≈ ' : ''}${usage.currency ?? 'USD'} ${cost.value.toFixed(4)}` : ''}
+                </Badge>
+              </span>
+            </Tooltip>
+          ) : null}
+          <span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <Tooltip content={t('chat.copyMessage')}>
+              <IconButton size="sm" label={t('chat.copyMessage')} onClick={copy}>
+                {copied ? <IconCheck size={12} className="text-[var(--success)]" /> : <IconCopy size={12} />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip content={t('chat.editCreatesFork')}>
+              <IconButton size="sm" label={t('sidebar.fork')} onClick={() => onFork(item.id)}>
+                <IconFork size={12} />
+              </IconButton>
+            </Tooltip>
+          </span>
+        </div>
       </div>
     </article>
   );
@@ -231,7 +281,7 @@ function TechnicalBlock({
 
   return (
     <section
-      className={clsx('ch-anim-fade rounded-[var(--radius-md)] border', wide ? 'ch-prose-wide' : 'ch-prose')}
+      className={clsx('ch-anim-fade ml-[34px] rounded-[var(--radius-md)] border', wide ? 'ch-prose-wide' : 'ch-prose')}
       style={{ background: 'var(--surface-1)', borderColor }}
     >
       <button
@@ -324,7 +374,11 @@ function StepMarker({ status }: { status: PlanStep['status'] }) {
     return <IconCheck size={13} className="mt-[3px] flex-none text-[var(--success)]" />;
   }
   if (status === 'inProgress') {
-    return <span className="mt-[5px] flex-none"><Spinner size={11} /></span>;
+    return (
+      <span className="mt-[5px] flex-none">
+        <Spinner size={11} />
+      </span>
+    );
   }
   if (status === 'skipped') {
     return <span className="mt-[3px] flex-none text-[11px] text-[var(--text-faint)]">—</span>;
@@ -390,15 +444,15 @@ function ToolBlock({ item, developerMode }: { item: ConversationItem; developerM
           {tool?.durationMs !== undefined ? (
             <span className="text-[11px] text-[var(--text-faint)]">{formatDuration(tool.durationMs)}</span>
           ) : null}
-          {failed ? <Badge tone="danger">falhou</Badge> : item.status === 'completed' ? (
+          {failed ? (
+            <Badge tone="danger">falhou</Badge>
+          ) : item.status === 'completed' ? (
             <Badge tone="success">ok</Badge>
           ) : null}
         </span>
       }
     >
-      {tool?.error ? (
-        <p className="mb-2 text-[12.5px] leading-snug text-[var(--danger)]">{tool.error}</p>
-      ) : null}
+      {tool?.error ? <p className="mb-2 text-[12.5px] leading-snug text-[var(--danger)]">{tool.error}</p> : null}
       {tool?.arguments !== undefined ? (
         <div className="mb-2">
           <p className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-faint)]">Argumentos</p>
@@ -457,7 +511,7 @@ function ErrorBlock({ item }: { item: ConversationItem }) {
   const [showTechnical, setShowTechnical] = useState(false);
   return (
     <section
-      className="ch-anim-fade ch-prose rounded-[var(--radius-md)] border px-3 py-2.5"
+      className="ch-anim-fade ch-prose ml-[34px] rounded-[var(--radius-md)] border px-3 py-2.5"
       style={{ background: 'var(--danger-soft)', borderColor: 'var(--danger)' }}
       role="alert"
     >
@@ -496,7 +550,7 @@ function ErrorBlock({ item }: { item: ConversationItem }) {
 function NoticeBlock({ item }: { item: ConversationItem }) {
   return (
     <section
-      className="ch-anim-fade ch-prose flex items-start gap-2 rounded-[var(--radius-md)] border px-3 py-2"
+      className="ch-anim-fade ch-prose ml-[34px] flex items-start gap-2 rounded-[var(--radius-md)] border px-3 py-2"
       style={{ background: 'var(--surface-1)', borderColor: 'var(--border)' }}
     >
       <IconInfo size={14} className="mt-[2px] flex-none text-[var(--text-faint)]" />
@@ -533,8 +587,7 @@ function describeDelivery(delivery: AttachmentDelivery | undefined): string | un
   }
 }
 
-export const MemoizedMessageItem = MessageItem;
-
+/** Filtra os resumos de raciocínio conforme a preferência da pessoa. */
 export function useVisibleItems(items: ConversationItem[], showReasoning: boolean): ConversationItem[] {
   return useMemo(
     () => (showReasoning ? items : items.filter((item) => item.kind !== 'reasoningSummary')),

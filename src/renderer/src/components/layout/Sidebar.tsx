@@ -1,6 +1,11 @@
 /**
- * Barra lateral: nova conversa, pesquisa, conversas agrupadas, favoritos,
- * workspaces recentes e acesso ao catálogo, skills e configurações.
+ * Barra lateral: identidade do aplicativo, nova conversa, pesquisa, conversas
+ * agrupadas, favoritos, workspaces recentes e acesso ao catálogo, skills e
+ * configurações.
+ *
+ * Cada linha assina só as ações de que precisa (seletores individuais): o
+ * store muda a cada quadro durante o streaming, e assinar o store inteiro
+ * renderizava todas as linhas de novo a cada delta.
  */
 
 import { useMemo, useState } from 'react';
@@ -17,13 +22,18 @@ import {
   IconArchive,
   IconChevronLeft,
   IconChevronRight,
+  IconCopy,
+  IconDownload,
+  IconEdit,
   IconFolder,
   IconFork,
   IconList,
+  IconMore,
   IconPlus,
   IconSearch,
   IconSettings,
   IconSkill,
+  IconSpark,
   IconStar,
   IconStarFilled,
   IconTrash,
@@ -54,12 +64,21 @@ function groupByPeriod(conversations: ConversationSummary[]): Group[] {
   return buckets.filter((bucket) => bucket.conversations.length > 0);
 }
 
-export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
+export function Sidebar({
+  onNewConversation,
+  forceCollapsed = false,
+}: {
+  onNewConversation(): void;
+  /** Janela estreita: mostra só o trilho de ícones, sem alterar a preferência. */
+  forceCollapsed?: boolean;
+}) {
   const layout = useUiStore((state) => state.layout);
   const setLayout = useUiStore((state) => state.setLayout);
   const openDialog = useUiStore((state) => state.openDialog);
   const applySettings = useAppStore((state) => state.applySettings);
   const workspaces = useAppStore((state) => state.workspaces);
+  const appName = useAppStore((state) => state.appName);
+  const appVersion = useAppStore((state) => state.appVersion);
 
   const conversations = useConversationStore((state) => state.conversations);
   const activeId = useConversationStore((state) => state.activeId);
@@ -83,6 +102,8 @@ export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
 
   const favorites = filtered.filter((conversation) => conversation.favorite);
   const rest = filtered.filter((conversation) => !conversation.favorite);
+  const archivedCount = useMemo(() => conversations.filter((c) => c.archived).length, [conversations]);
+  const activeCount = conversations.length - archivedCount;
 
   const groups: Group[] = useMemo(() => {
     if (!groupByWorkspace) return groupByPeriod(rest);
@@ -100,24 +121,29 @@ export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
       .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
   }, [groupByWorkspace, rest]);
 
-  if (layout.sidebarCollapsed) {
+  if (layout.sidebarCollapsed || forceCollapsed) {
     return (
       <nav
-        aria-label="Navegação principal"
+        aria-label={t('sidebar.navLabel')}
         className="flex w-12 flex-none flex-col items-center gap-1 border-r py-2"
         style={{ background: 'var(--surface-1)' }}
       >
-        <Tooltip content={t('sidebar.expand')}>
-          <IconButton
-            label={t('sidebar.expand')}
-            onClick={() => {
-              setLayout({ sidebarCollapsed: false });
-              void applySettings({ layout: { sidebarCollapsed: false } });
-            }}
-          >
-            <IconChevronRight />
-          </IconButton>
-        </Tooltip>
+        <span className="ch-avatar mb-1" aria-hidden="true" title={appName}>
+          <IconSpark size={13} />
+        </span>
+        {!forceCollapsed ? (
+          <Tooltip content={t('sidebar.expand')}>
+            <IconButton
+              label={t('sidebar.expand')}
+              onClick={() => {
+                setLayout({ sidebarCollapsed: false });
+                void applySettings({ layout: { sidebarCollapsed: false } });
+              }}
+            >
+              <IconChevronRight />
+            </IconButton>
+          </Tooltip>
+        ) : null}
         <Tooltip content={`${t('sidebar.newConversation')} (Ctrl+N)`}>
           <IconButton label={t('sidebar.newConversation')} onClick={onNewConversation}>
             <IconPlus />
@@ -146,30 +172,43 @@ export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
 
   return (
     <nav
-      aria-label="Navegação principal"
+      aria-label={t('sidebar.navLabel')}
       className="flex h-full flex-none flex-col border-r"
       style={{ width: layout.sidebarWidth, background: 'var(--surface-1)' }}
     >
-      <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pt-2.5">
-        <Button
-          variant="primary"
-          size="sm"
-          iconLeft={<IconPlus />}
-          onClick={onNewConversation}
-          className="flex-1"
-          title={`${t('sidebar.newConversation')} (Ctrl+N)`}
-        >
-          {t('sidebar.newConversation')}
-        </Button>
+      <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
+        <span className="ch-avatar" aria-hidden="true">
+          <IconSpark size={13} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+          {appName}
+        </span>
+        <span className="ch-mono text-[10.5px] text-[var(--text-faint)]" title={`Versão ${appVersion}`}>
+          v{appVersion}
+        </span>
         <IconButton
+          size="sm"
           label={t('sidebar.collapse')}
           onClick={() => {
             setLayout({ sidebarCollapsed: true });
             void applySettings({ layout: { sidebarCollapsed: true } });
           }}
         >
-          <IconChevronLeft />
+          <IconChevronLeft size={14} />
         </IconButton>
+      </div>
+
+      <div className="px-2.5 pb-1.5 pt-1.5">
+        <Button
+          variant="primary"
+          size="sm"
+          iconLeft={<IconPlus />}
+          onClick={onNewConversation}
+          block
+          title={`${t('sidebar.newConversation')} (Ctrl+N)`}
+        >
+          {t('sidebar.newConversation')}
+        </Button>
       </div>
 
       <div className="relative px-2.5 pb-2">
@@ -187,35 +226,19 @@ export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
       </div>
 
       <div className="flex items-center gap-1 px-2.5 pb-1.5">
-        <button
-          type="button"
-          onClick={() => setShowArchived(false)}
-          aria-pressed={!showArchived}
-          className={clsx(
-            'rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11.5px] font-medium transition-colors',
-            !showArchived ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]',
-          )}
-          style={!showArchived ? { background: 'var(--surface-3)' } : undefined}
-        >
-          Ativas
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowArchived(true)}
-          aria-pressed={showArchived}
-          className={clsx(
-            'rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11.5px] font-medium transition-colors',
-            showArchived ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]',
-          )}
-          style={showArchived ? { background: 'var(--surface-3)' } : undefined}
-        >
+        <FilterTab active={!showArchived} onClick={() => setShowArchived(false)}>
+          {t('sidebar.active')}
+          <TabCount>{activeCount}</TabCount>
+        </FilterTab>
+        <FilterTab active={showArchived} onClick={() => setShowArchived(true)}>
           {t('sidebar.archived')}
-        </button>
+          <TabCount>{archivedCount}</TabCount>
+        </FilterTab>
         <div className="ml-auto">
-          <Tooltip content={groupByWorkspace ? 'Agrupar por período' : 'Agrupar por workspace'}>
+          <Tooltip content={groupByWorkspace ? t('sidebar.groupByPeriod') : t('sidebar.groupByWorkspace')}>
             <IconButton
               size="sm"
-              label={groupByWorkspace ? 'Agrupar por período' : 'Agrupar por workspace'}
+              label={groupByWorkspace ? t('sidebar.groupByPeriod') : t('sidebar.groupByWorkspace')}
               active={groupByWorkspace}
               onClick={() => setGroupByWorkspace((value) => !value)}
             >
@@ -312,6 +335,28 @@ export function Sidebar({ onNewConversation }: { onNewConversation(): void }) {
   );
 }
 
+function TabCount({ children }: { children: number }) {
+  if (children === 0) return null;
+  return <span className="ml-1 text-[10.5px] font-normal text-[var(--text-faint)]">{children}</span>;
+}
+
+function FilterTab({ active, onClick, children }: { active: boolean; onClick(): void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        'inline-flex items-center rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11.5px] font-medium transition-colors',
+        active ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]',
+      )}
+      style={active ? { background: 'var(--surface-3)' } : undefined}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ConversationRow({
   conversation,
   active,
@@ -321,42 +366,46 @@ function ConversationRow({
   active: boolean;
   onSelect(): void;
 }) {
-  const store = useConversationStore();
+  const rename = useConversationStore((state) => state.rename);
+  const setFavorite = useConversationStore((state) => state.setFavorite);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(conversation.title);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const statusTone =
-    conversation.status === 'running'
-      ? 'accent'
-      : conversation.status === 'awaitingApproval'
-        ? 'warning'
-        : conversation.status === 'error'
-          ? 'danger'
-          : 'neutral';
+  const commitRename = (): void => {
+    const next = title.trim();
+    if (next !== '' && next !== conversation.title) void rename(conversation.id, next);
+    setRenaming(false);
+  };
+
+  const busy = conversation.status === 'running' || conversation.status === 'awaitingApproval';
 
   return (
     <li>
       <div
         className={clsx(
-          'group relative flex items-center gap-1.5 rounded-[var(--radius-sm)] pl-2 pr-1 transition-colors',
-          active ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--surface-3)]',
+          'ch-row group relative flex items-center gap-1.5 rounded-[var(--radius-sm)] pl-2.5 pr-1 transition-colors',
+          active ? 'ch-row-active bg-[var(--accent-soft)]' : 'hover:bg-[var(--surface-3)]',
         )}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenuOpen(true);
+        }}
       >
         {renaming ? (
           <form
-            className="flex-1 py-1"
+            className="flex-1"
             onSubmit={(event) => {
               event.preventDefault();
-              const next = title.trim();
-              if (next !== '' && next !== conversation.title) void store.rename(conversation.id, next);
-              setRenaming(false);
+              commitRename();
             }}
           >
             <Input
               autoFocus
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              onBlur={() => setRenaming(false)}
+              // Clicar fora CONFIRMA o novo título (antes, descartava em silêncio).
+              onBlur={commitRename}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   event.stopPropagation();
@@ -373,7 +422,7 @@ function ConversationRow({
             type="button"
             onClick={onSelect}
             aria-current={active ? 'true' : undefined}
-            className="min-w-0 flex-1 py-1.5 text-left"
+            className="min-w-0 flex-1 text-left"
             title={conversation.title}
           >
             <span
@@ -385,24 +434,36 @@ function ConversationRow({
               {conversation.title}
             </span>
             <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
+              {busy ? (
+                <span
+                  aria-hidden="true"
+                  className={clsx('h-1.5 w-1.5 flex-none rounded-full', conversation.status === 'running' && 'ch-pulse')}
+                  style={{ background: conversation.status === 'running' ? 'var(--accent)' : 'var(--warning)' }}
+                />
+              ) : null}
               <span>{formatRelative(conversation.updatedAt)}</span>
-              {conversation.status === 'running' || conversation.status === 'awaitingApproval' ? (
-                <Badge tone={statusTone}>
-                  {conversation.status === 'running' ? 'em execução' : 'aprovação'}
+              {busy ? (
+                <Badge tone={conversation.status === 'running' ? 'accent' : 'warning'}>
+                  {conversation.status === 'running' ? t('sidebar.running') : t('sidebar.awaiting')}
                 </Badge>
               ) : null}
               {conversation.forkedFromId ? (
-                <IconFork size={11} className="text-[var(--text-faint)]" aria-label="Ramificação" />
+                <IconFork size={11} className="text-[var(--text-faint)]" aria-label={t('sidebar.forkBadge')} />
               ) : null}
             </span>
           </button>
         )}
 
-        <div className="flex flex-none items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <div
+          className={clsx(
+            'flex flex-none items-center transition-opacity focus-within:opacity-100 group-hover:opacity-100',
+            menuOpen || conversation.favorite ? 'opacity-100' : 'opacity-0',
+          )}
+        >
           <IconButton
             size="sm"
             label={conversation.favorite ? t('common.unfavorite') : t('common.favorite')}
-            onClick={() => void store.setFavorite(conversation.id, !conversation.favorite)}
+            onClick={() => void setFavorite(conversation.id, !conversation.favorite)}
           >
             {conversation.favorite ? (
               <IconStarFilled size={13} className="text-[var(--warning)]" />
@@ -410,60 +471,128 @@ function ConversationRow({
               <IconStar size={13} />
             )}
           </IconButton>
-          <Popover
-            label="Ações da conversa"
-            align="end"
-            width={208}
-            trigger={
-              <IconButton size="sm" label="Mais ações">
-                <span aria-hidden="true" className="text-[13px] leading-none">
-                  ⋯
-                </span>
-              </IconButton>
-            }
-          >
-            {(close) => (
-              <div className="p-1">
-                <MenuItem
-                  label={t('sidebar.rename')}
-                  onClick={() => {
-                    setTitle(conversation.title);
-                    setRenaming(true);
-                    close();
-                  }}
-                />
-                <MenuItem
-                  label={t('sidebar.fork')}
-                  icon={<IconFork size={14} />}
-                  onClick={() => {
-                    void store.fork(conversation.id);
-                    close();
-                  }}
-                />
-                <MenuItem
-                  label={conversation.archived ? t('sidebar.unarchive') : t('sidebar.archive')}
-                  icon={<IconArchive size={14} />}
-                  onClick={() => {
-                    void store.archive(conversation.id, !conversation.archived);
-                    close();
-                  }}
-                />
-                <div className="ch-divider my-1" />
-                <MenuItem
-                  label={t('sidebar.delete')}
-                  icon={<IconTrash size={14} />}
-                  tone="danger"
-                  onClick={() => {
-                    if (window.confirm(t('sidebar.deleteConfirm'))) void store.remove(conversation.id);
-                    close();
-                  }}
-                />
-              </div>
-            )}
-          </Popover>
+          <ConversationMenu
+            conversation={conversation}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            onRename={() => {
+              setTitle(conversation.title);
+              setRenaming(true);
+            }}
+          />
         </div>
       </div>
     </li>
+  );
+}
+
+/** Menu de ações de uma conversa (botão "…" ou clique com o botão direito). */
+export function ConversationMenu({
+  conversation,
+  open,
+  onOpenChange,
+  onRename,
+  align = 'end',
+}: {
+  conversation: ConversationSummary;
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
+  onRename?(): void;
+  align?: 'start' | 'end';
+}) {
+  const fork = useConversationStore((state) => state.fork);
+  const archive = useConversationStore((state) => state.archive);
+  const remove = useConversationStore((state) => state.remove);
+  const exportConversation = useConversationStore((state) => state.exportConversation);
+  const copyAsMarkdown = useConversationStore((state) => state.copyAsMarkdown);
+  const confirm = useUiStore((state) => state.confirm);
+
+  return (
+    <Popover
+      label={t('sidebar.actions')}
+      align={align}
+      width={232}
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={
+        <IconButton size="sm" label={t('common.more')}>
+          <IconMore size={14} />
+        </IconButton>
+      }
+    >
+      {(close) => (
+        <div className="p-1">
+          {onRename ? (
+            <MenuItem
+              label={t('sidebar.rename')}
+              icon={<IconEdit size={14} />}
+              onClick={() => {
+                onRename();
+                close();
+              }}
+            />
+          ) : null}
+          <MenuItem
+            label={t('sidebar.fork')}
+            icon={<IconFork size={14} />}
+            onClick={() => {
+              void fork(conversation.id);
+              close();
+            }}
+          />
+          <div className="ch-divider my-1" />
+          <MenuItem
+            label={t('sidebar.exportMarkdown')}
+            icon={<IconDownload size={14} />}
+            onClick={() => {
+              void exportConversation(conversation.id, 'markdown');
+              close();
+            }}
+          />
+          <MenuItem
+            label={t('sidebar.exportJson')}
+            icon={<IconDownload size={14} />}
+            onClick={() => {
+              void exportConversation(conversation.id, 'json');
+              close();
+            }}
+          />
+          <MenuItem
+            label={t('sidebar.copyMarkdown')}
+            icon={<IconCopy size={14} />}
+            onClick={() => {
+              void copyAsMarkdown(conversation.id);
+              close();
+            }}
+          />
+          <div className="ch-divider my-1" />
+          <MenuItem
+            label={conversation.archived ? t('sidebar.unarchive') : t('sidebar.archive')}
+            icon={<IconArchive size={14} />}
+            onClick={() => {
+              void archive(conversation.id, !conversation.archived);
+              close();
+            }}
+          />
+          <MenuItem
+            label={t('sidebar.delete')}
+            icon={<IconTrash size={14} />}
+            tone="danger"
+            onClick={() => {
+              close();
+              void confirm({
+                title: t('sidebar.deleteTitle'),
+                body: t('sidebar.deleteBody', { title: conversation.title }),
+                confirmLabel: t('sidebar.delete'),
+                tone: 'danger',
+              }).then((accepted) => {
+                if (accepted) void remove(conversation.id);
+              });
+            }}
+          />
+        </div>
+      )}
+    </Popover>
   );
 }
 
@@ -474,6 +603,7 @@ export function MenuItem({
   tone = 'default',
   disabled,
   disabledReason,
+  shortcut,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -481,6 +611,7 @@ export function MenuItem({
   tone?: 'default' | 'danger';
   disabled?: boolean;
   disabledReason?: string;
+  shortcut?: string;
 }) {
   return (
     <button
@@ -495,7 +626,8 @@ export function MenuItem({
       )}
     >
       {icon ? <span className="flex-none text-[var(--text-faint)]">{icon}</span> : null}
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {shortcut ? <span className="ch-mono flex-none text-[10.5px] text-[var(--text-faint)]">{shortcut}</span> : null}
     </button>
   );
 }

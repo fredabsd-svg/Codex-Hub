@@ -3,6 +3,10 @@
  *
  * A rolagem acompanha a resposta APENAS se a pessoa estiver perto do final.
  * Caso contrário, o botão "Ir para a resposta" aparece e nada se move sozinho.
+ *
+ * Um `ResizeObserver` no conteúdo cobre mudanças de altura sem evento de
+ * rolagem (bloco de código expandido, diff carregado, editor montado): sem
+ * ele, o botão aparecia com a pessoa já no final da conversa.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -32,7 +36,22 @@ export function useStickyScroll<T>(dependency: T): {
     if (!element) return;
     element.addEventListener('scroll', measure, { passive: true });
     measure();
-    return () => element.removeEventListener('scroll', measure);
+
+    // Conteúdo que cresce sem rolagem: mantém o final visível se a pessoa
+    // estava no final; caso contrário, apenas atualiza o estado do botão.
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver === 'function') {
+      observer = new ResizeObserver(() => {
+        if (stick.current) element.scrollTop = element.scrollHeight;
+        else measure();
+      });
+      observer.observe(element);
+      if (element.firstElementChild) observer.observe(element.firstElementChild);
+    }
+    return () => {
+      element.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
   }, [measure]);
 
   useEffect(() => {

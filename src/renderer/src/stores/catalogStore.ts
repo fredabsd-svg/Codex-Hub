@@ -26,9 +26,13 @@ interface CatalogState {
   pages: Record<string, ModelCatalogPage>;
   loading: Record<string, boolean>;
   favorites: string[];
+  /** `providerId::modelId`, do mais recente ao mais antigo. */
+  recents: string[];
   filters: CatalogFilters;
   probing: string | null;
 
+  /** Recebe favoritos e recentes persistidos, no bootstrap. */
+  hydrate(favorites: string[], recents: string[]): void;
   load(providerId: string, force?: boolean): Promise<void>;
   addManual(providerId: string, modelId: string, displayName?: string): Promise<void>;
   toggleFavorite(providerId: string, modelId: string): Promise<void>;
@@ -56,18 +60,30 @@ export const DEFAULT_FILTERS: CatalogFilters = {
  * receber um `undefined` imediato e concluir que não há modelos.
  */
 const inflight = new Map<string, Promise<void>>();
+const markers = new Map<string, { done: boolean }>();
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   pages: {},
   loading: {},
   favorites: [],
+  recents: [],
   filters: DEFAULT_FILTERS,
   probing: null,
+
+  hydrate(favorites, recents) {
+    set({ favorites, recents });
+  },
 
   async load(providerId, force = false) {
     const running = inflight.get(providerId);
     if (running && !force) return running;
+    // Atualização forçada durante uma carga em andamento: espera a carga
+    // terminar para não deixar duas tarefas gravando a mesma página.
+    if (running) await running.catch(() => undefined);
 
+    // Marcador próprio: o `finally` só limpa a entrada se ela ainda for desta
+    // carga (uma carga forçada posterior pode ter substituído a entrada).
+    const marker = { done: false };
     const task = (async (): Promise<void> => {
       set((state) => ({ loading: { ...state.loading, [providerId]: true } }));
       try {
@@ -85,12 +101,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       } catch (err) {
         useUiStore.getState().pushError(errorOf(err), 'Não foi possível carregar o catálogo');
       } finally {
-        inflight.delete(providerId);
-        set((state) => ({ loading: { ...state.loading, [providerId]: false } }));
+        marker.done = true;
+        if (markers.get(providerId) === marker) {
+          inflight.delete(providerId);
+          markers.delete(providerId);
+          set((state) => ({ loading: { ...state.loading, [providerId]: false } }));
+        }
       }
     })();
 
     inflight.set(providerId, task);
+    markers.set(providerId, marker);
     return task;
   },
 

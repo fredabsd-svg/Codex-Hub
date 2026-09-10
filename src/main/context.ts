@@ -171,6 +171,7 @@ export function createAppContext(options: { userDataDir?: string; logsDir?: stri
         maxResultBytes: current.toolMaxResultBytes,
       };
     },
+    customInstructions: () => settings.get().customInstructions,
   });
 
   const engineFor = (engineId: EngineId): ExecutionEngine => (engineId === 'codex' ? codexEngine : directEngine);

@@ -65,24 +65,46 @@
 
   --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(4, 6, 8, 0.62);
+
+  /* Bolha da pessoa e identidade do assistente */
+  --bubble-user: #1c2530;
+  --bubble-user-border: #2a3745;
+  --avatar-assistant: linear-gradient(135deg, #2fb2c2, #6d8ff0);
+
+  /* Realce de sintaxe */
+  --hl-comment: #6c7783;
+  --hl-string: #8fd0a1;
+  --hl-number: #e6b366;
+  --hl-keyword: #c792ea;
+  --hl-type: #7fd3e0;
+  --hl-function: #82aaff;
+  --hl-property: #d4c48c;
+  --hl-punctuation: #8a96a3;
+  --hl-operator: #89ddff;
+  --hl-tag: #f07178;
+  --hl-attribute: #ffcb6b;
+  --hl-variable: #f78c6c;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --surface-0: #f5f6f8;
+  --surface-0: #f3f4f6;
   --surface-1: #ffffff;
-  --surface-2: #f0f2f5;
-  --surface-3: #e5e8ec;
-  --surface-inset: #fafbfc;
+  --surface-2: #f4f5f7;
+  --surface-3: #e8ebef;
+  /* Rebaixado em relação aos painéis: campos e blocos de código "afundam". */
+  --surface-inset: #f7f8fa;
 
-  --border: #dcdfe4;
-  --border-strong: #bcc2c9;
+  --border: #dfe3e8;
+  --border-strong: #c2c8cf;
   --border-focus: #16808e;
 
   --text: #171b1f;
-  --text-muted: #5a636d;
-  --text-faint: #838d97;
+  --text-muted: #525b66;
+  /* ≥ 4.5:1 sobre branco: a barra de status inteira usa esta cor. */
+  --text-faint: #6b7580;
   --text-inverse: #ffffff;
 
   --accent: #16808e;
@@ -108,6 +130,24 @@
 
   --shadow-panel: 0 1px 2px rgba(15, 20, 25, 0.08);
   --shadow-popover: 0 8px 28px rgba(15, 20, 25, 0.16);
+  --scrim: rgba(23, 27, 31, 0.42);
+
+  --bubble-user: #eaf5f7;
+  --bubble-user-border: #cfe6ea;
+  --avatar-assistant: linear-gradient(135deg, #16808e, #3557c4);
+
+  --hl-comment: #7a8591;
+  --hl-string: #1f7a3f;
+  --hl-number: #a15c00;
+  --hl-keyword: #7c3aed;
+  --hl-type: #0f6f7d;
+  --hl-function: #2f5fd6;
+  --hl-property: #7a5a00;
+  --hl-punctuation: #6b7580;
+  --hl-operator: #0e6a86;
+  --hl-tag: #b3403a;
+  --hl-attribute: #8a5a00;
+  --hl-variable: #b54b1f;
 }
 
 /* --------------------------------------------------------------------------
@@ -129,23 +169,33 @@ body {
   background: var(--surface-0);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: calc(14px * var(--font-scale, 1));
+  font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
-/* Densidade da interface */
-:root[data-density='compact'] {
-  --row-h: 28px;
-  --pad-y: 4px;
-  --gap: 6px;
-}
-
+/* Densidade da interface: consumida pela barra lateral, pela lista de
+   mensagens e pelo composer. */
 :root {
   --row-h: 34px;
   --pad-y: 6px;
   --gap: 8px;
+  --message-gap: 20px;
+  --chat-pad-y: 20px;
+  --chat-max-width: 880px;
+}
+
+:root[data-density='compact'] {
+  --row-h: 28px;
+  --pad-y: 3px;
+  --gap: 6px;
+  --message-gap: 12px;
+  --chat-pad-y: 12px;
+}
+
+:root[data-chat-width='wide'] {
+  --chat-max-width: 1400px;
 }
 
 /* Foco visível e consistente em qualquer controle */
@@ -309,11 +359,79 @@ select {
 
 /* Largura confortável de leitura para mensagens */
 .ch-prose {
-  max-width: 76ch;
+  max-width: min(76ch, 100%);
 }
 
 .ch-prose-wide {
-  max-width: 110ch;
+  max-width: min(110ch, 100%);
+}
+
+:root[data-chat-width='wide'] .ch-prose,
+:root[data-chat-width='wide'] .ch-prose-wide {
+  max-width: 100%;
+}
+
+/* Identidade do assistente e bolha da pessoa */
+.ch-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--avatar-assistant);
+  color: #fff;
+  flex: none;
+  box-shadow: var(--shadow-panel);
+}
+
+.ch-bubble-user {
+  background: var(--bubble-user);
+  border: 1px solid var(--bubble-user-border);
+  border-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-xs);
+}
+
+/* Linha da barra lateral */
+.ch-row {
+  min-height: var(--row-h);
+  padding-top: var(--pad-y);
+  padding-bottom: var(--pad-y);
+}
+
+.ch-row-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* Chips de sugestão na conversa vazia */
+.ch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: left;
+  transition:
+    border-color 140ms var(--ease-out-quart),
+    color 140ms var(--ease-out-quart),
+    background 140ms var(--ease-out-quart);
+}
+
+.ch-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-soft);
 }
 
 /* --------------------------------------------------------------------------
@@ -378,6 +496,8 @@ select {
   color: var(--accent-hover);
 }
 
+/* Código inline. Dentro de um bloco (`pre`) o estilo é desligado: sem isto,
+   cada linha de um bloco de código apareceria "encaixotada". */
 .ch-md code {
   font-family: var(--font-mono);
   font-size: 0.86em;
@@ -385,6 +505,77 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   padding: 0.1em 0.35em;
+}
+
+.ch-md pre code,
+.ch-code pre code {
+  font-size: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.ch-md .ch-code {
+  margin: 0.4em 0;
+}
+
+/* Realce de sintaxe */
+.ch-hl-comment {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.ch-hl-string {
+  color: var(--hl-string);
+}
+.ch-hl-number {
+  color: var(--hl-number);
+}
+.ch-hl-keyword {
+  color: var(--hl-keyword);
+}
+.ch-hl-type {
+  color: var(--hl-type);
+}
+.ch-hl-function {
+  color: var(--hl-function);
+}
+.ch-hl-property {
+  color: var(--hl-property);
+}
+.ch-hl-punctuation {
+  color: var(--hl-punctuation);
+}
+.ch-hl-operator {
+  color: var(--hl-operator);
+}
+.ch-hl-tag {
+  color: var(--hl-tag);
+}
+.ch-hl-attribute {
+  color: var(--hl-attribute);
+}
+.ch-hl-variable {
+  color: var(--hl-variable);
+}
+
+/* Numeração de linhas dos blocos de código */
+.ch-code-lines {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.ch-code-lines .ch-code-num {
+  color: var(--text-faint);
+  text-align: right;
+  padding-right: 0.9em;
+  user-select: none;
+  opacity: 0.8;
+}
+
+.ch-code-wrap pre {
+  white-space: pre-wrap !important;
+  word-break: break-word;
 }
 
 .ch-md blockquote {

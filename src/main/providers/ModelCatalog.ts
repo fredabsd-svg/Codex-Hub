@@ -47,15 +47,18 @@ export class ModelCatalog {
       const age = Date.now() - new Date(cached.fetchedAt).getTime();
       if (age < CATALOG_STALE_MS) return cached;
     }
-    return this.refresh(providerId, { signal: options.signal, fallback: cached });
+    return this.refresh(providerId, { signal: options.signal, fallback: cached, force: options.forceRefresh });
   }
 
   async refresh(
     providerId: string,
-    options: { signal?: AbortSignal; fallback?: ModelCatalogPage | null } = {},
+    options: { signal?: AbortSignal; fallback?: ModelCatalogPage | null; force?: boolean } = {},
   ): Promise<ModelCatalogPage> {
     const existing = this.inflight.get(providerId);
-    if (existing) return existing;
+    if (existing && !options.force) return existing;
+    // Atualização explícita durante uma busca em andamento: espera a busca
+    // terminar e faz uma nova, em vez de devolver o resultado antigo.
+    if (existing) await existing.catch(() => undefined);
 
     const provider = this.resolveProvider(providerId);
     if (!provider) {

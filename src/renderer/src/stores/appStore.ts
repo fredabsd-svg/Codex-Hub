@@ -21,6 +21,7 @@ import type {
 } from '@shared/domain';
 import type { BootstrapPayload } from '@shared/ipc';
 import { errorOf, invoke } from '../lib/api';
+import { useCatalogStore } from './catalogStore';
 import { useUiStore } from './uiStore';
 
 interface AppState {
@@ -68,6 +69,9 @@ const FALLBACK_SETTINGS: AppSettings = {
   fontScale: 1,
   density: 'comfortable',
   reduceMotion: 'system',
+  sendWithEnter: false,
+  showReasoningSummaries: true,
+  chatWidth: 'comfortable',
   defaultEngineId: 'direct',
   defaultMode: 'chat',
   approvalPolicy: 'onRequest',
@@ -128,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         notices: payload.notices,
       });
       useUiStore.getState().setLayout(payload.settings.layout);
+      useCatalogStore.getState().hydrate(payload.modelFavorites ?? [], payload.recentModels ?? []);
       applyThemeToDocument(payload.settings);
     } catch (err) {
       const detail = errorOf(err);
@@ -212,8 +217,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     try {
       const skills = await invoke('codex:skills', { workspacePath });
+      // A preferência local prevalece; sem preferência, vale o que o motor
+      // informou (o Codex entrega as skills habilitadas por padrão).
       const previous = new Map(get().skills.map((s) => [s.id, s.enabledLocally]));
-      set({ skills: skills.map((s) => ({ ...s, enabledLocally: previous.get(s.id) ?? false })) });
+      set({ skills: skills.map((s) => ({ ...s, enabledLocally: previous.get(s.id) ?? s.enabledLocally })) });
     } catch {
       set({ skills: [] });
     }
@@ -259,19 +266,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 }));
 
-/** Aplica tema, escala de fonte, densidade e redução de movimento no DOM. */
+/** Tema efetivo (resolve "do sistema" pela preferência do SO). */
+export function resolveTheme(settings: Pick<AppSettings, 'theme'>): 'dark' | 'light' {
+  if (settings.theme !== 'system') return settings.theme;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+/**
+ * Aplica tema, densidade, largura de leitura e redução de movimento no DOM.
+ * O tamanho da interface é aplicado pelo processo principal (zoom da janela).
+ */
 export function applyThemeToDocument(settings: AppSettings): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  const resolvedTheme =
-    settings.theme === 'system'
-      ? window.matchMedia?.('(prefers-color-scheme: light)').matches
-        ? 'light'
-        : 'dark'
-      : settings.theme;
-  root.setAttribute('data-theme', resolvedTheme);
+  root.setAttribute('data-theme', resolveTheme(settings));
   root.setAttribute('data-density', settings.density);
-  root.style.setProperty('--font-scale', String(settings.fontScale));
+  root.setAttribute('data-chat-width', settings.chatWidth ?? 'comfortable');
   if (settings.reduceMotion === 'always') root.setAttribute('data-motion', 'reduced');
   else root.removeAttribute('data-motion');
 }

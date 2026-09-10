@@ -47,6 +47,25 @@ function lookup(dictionary: Dictionary, key: string): string | undefined {
   return typeof node === 'string' ? node : undefined;
 }
 
+type ListLeaves<T, Prefix extends string = ''> = {
+  [K in keyof T & string]: T[K] extends readonly string[]
+    ? `${Prefix}${K}`
+    : T[K] extends Record<string, unknown>
+      ? ListLeaves<T[K], `${Prefix}${K}.`>
+      : never;
+}[keyof T & string];
+
+export type ListKey = ListLeaves<Dictionary>;
+
+/** Devolve uma lista de textos (ex.: sugestões iniciais). */
+export function tList(key: ListKey): readonly string[] {
+  let node: unknown = DICTIONARIES[currentLocale];
+  for (const segment of key.split('.')) {
+    node = node && typeof node === 'object' ? (node as Record<string, unknown>)[segment] : undefined;
+  }
+  return Array.isArray(node) ? (node as readonly string[]) : [];
+}
+
 /** Interpola `{nome}` com os valores informados. */
 export function t(key: MessageKey, values?: Record<string, string | number>): string {
   const dictionary = DICTIONARIES[currentLocale];

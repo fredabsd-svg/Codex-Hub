@@ -615,6 +615,14 @@ export interface AppSettings {
   fontScale: number;
   density: DensityPreference;
   reduceMotion: 'system' | 'always' | 'never';
+  /** Enter envia (Shift+Enter quebra linha). Quando false, Ctrl+Enter envia. */
+  sendWithEnter: boolean;
+  /** Mostra os resumos de raciocínio enviados pela API na conversa. */
+  showReasoningSummaries: boolean;
+  /** Largura da coluna de leitura da conversa. */
+  chatWidth: 'comfortable' | 'wide';
+  /** Instruções personalizadas anexadas ao prompt de sistema do motor direto. */
+  customInstructions?: string;
   defaultProviderId?: ProviderId;
   defaultModelId?: string;
   defaultEngineId: EngineId;
@@ -658,6 +666,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontScale: 1,
   density: 'comfortable',
   reduceMotion: 'system',
+  sendWithEnter: false,
+  showReasoningSummaries: true,
+  chatWidth: 'comfortable',
   defaultEngineId: 'direct',
   defaultMode: 'chat',
   approvalPolicy: 'onRequest',

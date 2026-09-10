@@ -51,11 +51,23 @@ npm run test:live    # somente com credencial real; ignorado sem as variáveis
 Distribuição:
 
 ```bash
-npm run dist:win     # instalador NSIS + portable (x64). Exige rodar no Windows.
+npm run dist:win     # instalador NSIS + executável portable (x64)
 npm run dist:dir     # empacota sem instalador (verificação de empacotamento)
 ```
 
-Os artefatos ficam em `release/<versão>/`.
+Os artefatos ficam em `release/<versão>/`:
+
+- `Codex Hub-0.1.0-x64.exe` — instalador NSIS (permite escolher a pasta, cria
+  atalhos, e **não** apaga os dados do usuário ao desinstalar);
+- `Codex Hub-0.1.0-portable.exe` — executável portable;
+- `win-unpacked/` — a árvore do aplicativo, útil para inspeção.
+
+Nada é assinado por padrão: assinatura exige um certificado próprio. Sem ela, o
+Windows mostra o aviso do SmartScreen na primeira execução.
+
+Em Linux é possível gerar os artefatos do Windows com Wine instalado
+(`wine` + `wine32`); é assim que os `.exe` desta versão foram produzidos. A
+instalação em si só pode ser verificada no Windows.
 
 ## Primeiro uso
 
@@ -106,7 +118,7 @@ diretório de instalação nem do ASAR:
 | Motor direto: ciclo completo de ferramentas, limites, aprovações | **implementado e validado** |
 | Codex App Server: handshake, correlação de IDs, eventos, aprovações, reinício | **implementado sem validação externa** (Codex CLI ausente no ambiente; coberto por transporte falso) |
 | Tipos gerados do protocolo Codex (`npm run codex:types`) | **bloqueado pelo ambiente** — os tipos em `src/generated/codex` são provisórios e o protocolo **não** é considerado validado por causa deles |
-| Instalador Windows (NSIS/portable) | **bloqueado pelo ambiente** — a pipeline está pronta, mas gerar `.exe` exige Windows; o empacotamento foi verificado com `--dir` |
+| Instalador Windows (NSIS) e executável portable x64 | **implementado sem validação externa** — os dois `.exe` são gerados por `npm run dist:win`; a instalação em uma máquina Windows real não foi executada aqui |
 | Execução de shell arbitrário no motor direto | **roadmap** — indisponível até haver isolamento efetivo; as ferramentas estruturadas continuam |
 | MCP / plugins | **roadmap** — nada é mostrado como conectado |
 | Atualização automática | **roadmap** — base preparada, desativada nesta versão |

@@ -152,5 +152,7 @@ aba sem abrir.
   crédito, custo relatado) fica **implementado sem validação externa**.
 - Sem o Codex CLI, o motor Codex é exercitado apenas com transporte falso, e os
   tipos do protocolo continuam provisórios.
-- `packaged.spec.ts` verifica o pacote gerado nesta máquina. O instalador
-  Windows (NSIS/portable) precisa ser gerado e testado no Windows.
+- `packaged.spec.ts` verifica o pacote gerado nesta máquina (árvore Linux com o
+  mesmo ASAR). O instalador NSIS e o portable do Windows **são gerados** por
+  `npm run dist:win` — inclusive em Linux com Wine — mas instalar e executar em
+  uma máquina Windows real não foi feito aqui.

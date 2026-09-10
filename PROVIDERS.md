@@ -107,6 +107,8 @@ Uma falha de rede ou de limite de taxa **nunca** é convertida em
 | OpenRouter: credencial, streaming autenticado, crédito, custo relatado | **implementado sem validação externa** | sem conta real neste ambiente. `tests/live/openrouter.live.test.ts` existe e é **ignorado explicitamente** sem `OPENROUTER_API_KEY` |
 | Codex App Server: handshake, correlação, eventos, aprovações, reinício com backoff, encerramento da árvore | **implementado sem validação externa** | Codex CLI ausente no ambiente. Coberto por transporte falso em `tests/integration/codexClient.test.ts` e `tests/integration/codexEngine.test.ts` |
 | Tipos gerados do protocolo Codex | **bloqueado pelo ambiente** | `npm run codex:types` exige o Codex instalado. `src/generated/codex/VERSION` contém `provisorio` e o aplicativo **não** considera o protocolo validado |
+| Distribuição Windows: instalador NSIS e portable x64 | **implementado sem validação externa** | os dois `.exe` foram gerados por `npm run dist:win`; instalar e executar em Windows real não foi feito aqui |
+| Aplicativo empacotado (ASAR): interface, caminhos e ponte segura | **implementado e validado** | `tests/e2e/packaged.spec.ts` |
 
 ### Procedência dos nomes de método do Codex
 
@@ -134,6 +136,7 @@ nenhum evento é inventado para preencher a interface.
 | Monaco Editor | 0.56.0 |
 | Vitest / Playwright | 3.2.7 / 1.63.0 |
 | electron-builder | 26.15.3 |
+| Artefatos Windows gerados | `Codex Hub-0.1.0-x64.exe` (NSIS) e `Codex Hub-0.1.0-portable.exe`, x64, **não assinados** |
 | Codex App Server | **não verificado** — nenhuma versão foi usada neste repositório |
 
 ---

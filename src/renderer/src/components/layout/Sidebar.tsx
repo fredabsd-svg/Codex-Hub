@@ -26,6 +26,7 @@ import {
   IconDownload,
   IconEdit,
   IconFolder,
+  IconGrid,
   IconFork,
   IconList,
   IconMore,
@@ -128,9 +129,13 @@ export function Sidebar({
         className="flex w-12 flex-none flex-col items-center gap-1 border-r py-2"
         style={{ background: 'var(--surface-1)' }}
       >
-        <span className="ch-avatar mb-1" aria-hidden="true" title={appName}>
-          <IconSpark size={13} />
-        </span>
+        <IconButton
+          label={t('workspaceExperience.home')}
+          active={!activeId}
+          onClick={() => void setActive(null)}
+        >
+          <IconGrid />
+        </IconButton>
         {!forceCollapsed ? (
           <Tooltip content={t('sidebar.expand')}>
             <IconButton
@@ -199,6 +204,17 @@ export function Sidebar({
       </div>
 
       <div className="px-2.5 pb-1.5 pt-1.5">
+        <Button
+          variant="subtle"
+          size="sm"
+          iconLeft={<IconGrid />}
+          onClick={() => void setActive(null)}
+          block
+          className="mb-2"
+          aria-current={!activeId ? 'page' : undefined}
+        >
+          {t('workspaceExperience.home')}
+        </Button>
         <Button
           variant="primary"
           size="sm"
@@ -340,7 +356,15 @@ function TabCount({ children }: { children: number }) {
   return <span className="ml-1 text-[10.5px] font-normal text-[var(--text-faint)]">{children}</span>;
 }
 
-function FilterTab({ active, onClick, children }: { active: boolean; onClick(): void; children: React.ReactNode }) {
+function FilterTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick(): void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -437,8 +461,13 @@ function ConversationRow({
               {busy ? (
                 <span
                   aria-hidden="true"
-                  className={clsx('h-1.5 w-1.5 flex-none rounded-full', conversation.status === 'running' && 'ch-pulse')}
-                  style={{ background: conversation.status === 'running' ? 'var(--accent)' : 'var(--warning)' }}
+                  className={clsx(
+                    'h-1.5 w-1.5 flex-none rounded-full',
+                    conversation.status === 'running' && 'ch-pulse',
+                  )}
+                  style={{
+                    background: conversation.status === 'running' ? 'var(--accent)' : 'var(--warning)',
+                  }}
                 />
               ) : null}
               <span>{formatRelative(conversation.updatedAt)}</span>
@@ -448,7 +477,11 @@ function ConversationRow({
                 </Badge>
               ) : null}
               {conversation.forkedFromId ? (
-                <IconFork size={11} className="text-[var(--text-faint)]" aria-label={t('sidebar.forkBadge')} />
+                <IconFork
+                  size={11}
+                  className="text-[var(--text-faint)]"
+                  aria-label={t('sidebar.forkBadge')}
+                />
               ) : null}
             </span>
           </button>
@@ -627,7 +660,9 @@ export function MenuItem({
     >
       {icon ? <span className="flex-none text-[var(--text-faint)]">{icon}</span> : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {shortcut ? <span className="ch-mono flex-none text-[10.5px] text-[var(--text-faint)]">{shortcut}</span> : null}
+      {shortcut ? (
+        <span className="ch-mono flex-none text-[10.5px] text-[var(--text-faint)]">{shortcut}</span>
+      ) : null}
     </button>
   );
 }

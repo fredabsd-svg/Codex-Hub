@@ -85,10 +85,22 @@ const settingsPatch = z
     developerMode: z.boolean(),
     demoMode: z.boolean(),
     attachmentMaxCount: z.number().int().min(1).max(200),
-    attachmentMaxBytes: z.number().int().min(1024).max(512 * 1024 * 1024),
+    attachmentMaxBytes: z
+      .number()
+      .int()
+      .min(1024)
+      .max(512 * 1024 * 1024),
     toolMaxSteps: z.number().int().min(1).max(200),
-    toolMaxDurationMs: z.number().int().min(1000).max(60 * 60 * 1000),
-    toolMaxResultBytes: z.number().int().min(1024).max(8 * 1024 * 1024),
+    toolMaxDurationMs: z
+      .number()
+      .int()
+      .min(1000)
+      .max(60 * 60 * 1000),
+    toolMaxResultBytes: z
+      .number()
+      .int()
+      .min(1024)
+      .max(8 * 1024 * 1024),
     layout,
   })
   .partial()
@@ -134,7 +146,11 @@ export const IPC_SCHEMAS: { [C in IpcInvokeChannel]: z.ZodType } = {
     .strict(),
   'catalog:refresh': z.object({ providerId: id }).strict(),
   'catalog:addManualModel': z
-    .object({ providerId: id, modelId: z.string().min(1).max(200), displayName: z.string().max(200).optional() })
+    .object({
+      providerId: id,
+      modelId: z.string().min(1).max(200),
+      displayName: z.string().max(200).optional(),
+    })
     .strict(),
   'catalog:setFavorite': z
     .object({ providerId: id, modelId: z.string().min(1).max(200), favorite: z.boolean() })
@@ -153,7 +169,10 @@ export const IPC_SCHEMAS: { [C in IpcInvokeChannel]: z.ZodType } = {
   'codex:stop': voidish,
   'codex:account': voidish,
   'codex:loginStart': z
-    .object({ method: z.enum(['chatgpt', 'deviceCode', 'apiKey']), apiKey: z.string().min(1).max(4096).optional() })
+    .object({
+      method: z.enum(['chatgpt', 'deviceCode', 'apiKey']),
+      apiKey: z.string().min(1).max(4096).optional(),
+    })
     .strict(),
   'codex:loginCancel': z.object({ loginId: id }).strict(),
   'codex:logout': voidish,
@@ -192,7 +211,13 @@ export const IPC_SCHEMAS: { [C in IpcInvokeChannel]: z.ZodType } = {
     })
     .strict(),
   'conversations:setFavorite': z.object({ conversationId: id, favorite: z.boolean() }).strict(),
-  'conversations:search': z.object({ query: z.string().max(500), limit: z.number().int().min(1).max(200).optional() }).strict(),
+  'conversations:search': z
+    .object({
+      query: z.string().max(500),
+      limit: z.number().int().min(1).max(200).optional(),
+      conversationId: id.optional(),
+    })
+    .strict(),
   'conversations:export': z.object({ conversationId: id, format: z.enum(['markdown', 'json']) }).strict(),
   'conversations:saveDraft': z
     .object({ conversationId: id, text, attachmentIds: z.array(id).max(200) })
@@ -233,19 +258,35 @@ export const IPC_SCHEMAS: { [C in IpcInvokeChannel]: z.ZodType } = {
   'workspaces:setFavorite': z.object({ id, favorite: z.boolean() }).strict(),
   'workspaces:git': z.object({ path }).strict(),
   'workspaces:gitChanges': z.object({ path }).strict(),
-  'workspaces:fileTree': z.object({ path, maxEntries: z.number().int().min(1).max(20_000).optional() }).strict(),
+  'workspaces:fileTree': z
+    .object({ path, maxEntries: z.number().int().min(1).max(20_000).optional() })
+    .strict(),
   'workspaces:readFile': z
-    .object({ workspacePath: path, filePath: path, maxBytes: z.number().int().min(1).max(8 * 1024 * 1024).optional() })
+    .object({
+      workspacePath: path,
+      filePath: path,
+      maxBytes: z
+        .number()
+        .int()
+        .min(1)
+        .max(8 * 1024 * 1024)
+        .optional(),
+    })
     .strict(),
 
   'attachments:choose': z.object({ conversationId: id }).strict(),
   'attachments:prepare': z.object({ conversationId: id, paths: z.array(path).min(1).max(200) }).strict(),
-  'attachments:prepareFromPaths': z.object({ conversationId: id, paths: z.array(path).min(1).max(200) }).strict(),
+  'attachments:prepareFromPaths': z
+    .object({ conversationId: id, paths: z.array(path).min(1).max(200) })
+    .strict(),
   'attachments:prepareFromClipboardImage': z
     .object({
       conversationId: id,
       // ~48 MB de base64.
-      base64: z.string().min(16).max(64 * 1024 * 1024),
+      base64: z
+        .string()
+        .min(16)
+        .max(64 * 1024 * 1024),
       suggestedName: z.string().max(200).optional(),
     })
     .strict(),

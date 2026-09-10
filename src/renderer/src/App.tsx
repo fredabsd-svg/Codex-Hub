@@ -32,6 +32,8 @@ import { CommandPalette } from './features/palette/CommandPalette';
 import { SkillsDialog } from './features/skills/SkillsDialog';
 import { WorkspacesDialog } from './features/workspace/WorkspacesDialog';
 import { IconAlert } from './components/ui/icons';
+import { Dialog } from './components/ui/Dialog';
+import { ConversationSearch } from './features/chat/ConversationSearch';
 
 export function App() {
   const ready = useAppStore((state) => state.ready);
@@ -84,8 +86,9 @@ export function App() {
       void loadCatalog(defaultProvider);
 
       const stored = useConversationStore.getState().conversations;
-      if (settings.startupBehavior === 'lastConversation' && stored[0]) {
-        await setActive(stored[0].id);
+      const latest = stored.find((entry) => !entry.archived);
+      if (settings.startupBehavior === 'lastConversation' && latest) {
+        await setActive(latest.id);
       } else if (settings.startupBehavior === 'newConversation' && onboardingCompleted) {
         // Reaproveita a conversa vazia mais recente em vez de acumular uma
         // conversa em branco a cada abertura do aplicativo.
@@ -122,44 +125,58 @@ export function App() {
     if (conversation) void refreshSkills(conversation.engineId, conversation.workspacePath);
   }, [conversation, refreshSkills]);
 
-  const handleNewConversation = useCallback(async () => {
-    const providerId =
-      settings.defaultProviderId ??
-      providers.find((provider) => provider.id === 'openrouter')?.id ??
-      providers[0]?.id;
-    if (!providerId) {
-      openDialog('onboarding');
-      return;
-    }
-    const engineId = providerId === 'codex' ? 'codex' : settings.defaultEngineId;
-    const pickModel = (): string | undefined => {
-      const page = useCatalogStore.getState().pages[providerId];
-      return (
-        settings.defaultModelId ??
-        page?.models.find((model) => model.codex?.isDefault)?.id ??
-        page?.models[0]?.id
-      );
-    };
-    let modelId = pickModel();
-    if (!modelId) {
-      // O catálogo pode ainda estar carregando na abertura do aplicativo:
-      // esperamos por ele antes de concluir que não há modelo disponível.
-      await loadCatalog(providerId).catch(() => undefined);
-      modelId = pickModel();
-    }
-    if (!modelId) {
-      openDialog('catalog');
-      return;
-    }
-    await createConversation({
-      engineId,
-      providerId,
-      modelId,
-      mode: settings.defaultMode,
-      workspacePath: settings.defaultWorkspacePath,
-    });
-    composerRef.current?.focus();
-  }, [settings, providers, createConversation, openDialog, loadCatalog]);
+  const creatingConversation = useRef(false);
+  const handleNewConversation = useCallback(
+    async (prompt?: string, workspacePath?: string) => {
+      if (creatingConversation.current) return;
+      creatingConversation.current = true;
+      try {
+        const providerId =
+          settings.defaultProviderId ??
+          providers.find((provider) => provider.id === 'openrouter')?.id ??
+          providers[0]?.id;
+        if (!providerId) {
+          openDialog('onboarding');
+          return;
+        }
+        const engineId = providerId === 'codex' ? 'codex' : 'direct';
+        const pickModel = (): string | undefined => {
+          const page = useCatalogStore.getState().pages[providerId];
+          return (
+            settings.defaultModelId ??
+            page?.models.find((model) => model.codex?.isDefault)?.id ??
+            page?.models[0]?.id
+          );
+        };
+        let modelId = pickModel();
+        if (!modelId) {
+          // O catálogo pode ainda estar carregando na abertura do aplicativo:
+          // esperamos por ele antes de concluir que não há modelo disponível.
+          await loadCatalog(providerId).catch(() => undefined);
+          modelId = pickModel();
+        }
+        if (!modelId) {
+          openDialog('catalog');
+          return;
+        }
+        const created = await createConversation({
+          engineId,
+          providerId,
+          modelId,
+          mode: settings.defaultMode,
+          workspacePath: workspacePath ?? settings.defaultWorkspacePath,
+        });
+        if (created && prompt) {
+          useConversationStore.getState().setDraftText(created.id, prompt);
+          void useConversationStore.getState().persistDraft(created.id);
+        }
+        window.setTimeout(() => composerRef.current?.focus(), 0);
+      } finally {
+        creatingConversation.current = false;
+      }
+    },
+    [settings, providers, createConversation, openDialog, loadCatalog],
+  );
 
   const focusComposer = useCallback(() => {
     // Após uma troca de conversa o composer é remontado; espera o quadro.
@@ -191,6 +208,9 @@ export function App() {
   });
 
   useHotkeys({
+    findInConversation: () => {
+      if (activeId) openDialog('conversationSearch');
+    },
     newConversation: () => void handleNewConversation(),
     commandPalette: () => {
       if (dialog === 'palette') closeDialog();
@@ -221,7 +241,9 @@ export function App() {
         <div className="ch-panel max-w-[52ch] p-5 text-center">
           <IconAlert size={22} className="mx-auto mb-2 text-[var(--danger)]" />
           <h1 className="text-[15px] font-semibold text-[var(--text)]">{t('errors.title')}</h1>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-muted)]">{t('app.bridgeMissing')}</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-muted)]">
+            {t('app.bridgeMissing')}
+          </p>
         </div>
       </div>
     );
@@ -304,19 +326,21 @@ export function App() {
           <Sidebar onNewConversation={() => void handleNewConversation()} forceCollapsed={veryNarrow} />
         )}
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="ch-workbench flex min-w-0 flex-1 flex-col">
           <Header conversation={conversation} />
           <MessageList
             conversation={conversation}
-            onNewConversation={() => void handleNewConversation()}
+            onNewConversation={(prompt, path) => void handleNewConversation(prompt, path)}
             onFocusComposer={focusComposer}
           />
-          <Composer
-            conversation={conversation}
-            registerHandle={(handle) => {
-              composerRef.current = handle;
-            }}
-          />
+          {conversation ? (
+            <Composer
+              conversation={conversation}
+              registerHandle={(handle) => {
+                composerRef.current = handle;
+              }}
+            />
+          ) : null}
         </main>
 
         {showRightPanel ? (
@@ -328,6 +352,23 @@ export function App() {
       </div>
 
       <StatusBar conversation={conversation} />
+      <Dialog
+        open={narrow && !layout.rightPanelCollapsed}
+        title={t('workspaceExperience.contextPanel')}
+        width={760}
+        className="ch-context-dialog"
+        onClose={() => {
+          setLayout({ rightPanelCollapsed: true });
+          void applySettings({ layout: { rightPanelCollapsed: true } });
+        }}
+      >
+        <RightPanel conversation={conversation} embedded />
+      </Dialog>
+      <ConversationSearch
+        open={dialog === 'conversationSearch' && !!conversation}
+        conversation={conversation}
+        onClose={closeDialog}
+      />
       <ToastRegion />
       <ConfirmDialog />
 

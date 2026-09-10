@@ -112,11 +112,16 @@ function UserMessage({
         <div className="text-[13.5px] leading-relaxed text-[var(--text)]">
           {renderMarkdown(item.text ?? '', {
             onOpenLink,
-            renderCodeBlock: (code, language, index) => <CodeBlock key={index} code={code} language={language} />,
+            renderCodeBlock: (code, language, index) => (
+              <CodeBlock key={index} code={code} language={language} />
+            ),
           })}
         </div>
         {item.attachments && item.attachments.length > 0 ? (
-          <ul className="mt-2 flex flex-wrap gap-1.5 border-t pt-2" style={{ borderColor: 'var(--bubble-user-border)' }}>
+          <ul
+            className="mt-2 flex flex-wrap gap-1.5 border-t pt-2"
+            style={{ borderColor: 'var(--bubble-user-border)' }}
+          >
             {item.attachments.map((attachment) => (
               <li key={attachment.id}>
                 <Tooltip
@@ -202,7 +207,9 @@ function AgentMessage({
         <div className="ch-prose text-[13.5px] leading-relaxed text-[var(--text)]">
           {renderMarkdown(item.text ?? '', {
             onOpenLink,
-            renderCodeBlock: (code, language, index) => <CodeBlock key={index} code={code} language={language} />,
+            renderCodeBlock: (code, language, index) => (
+              <CodeBlock key={index} code={code} language={language} />
+            ),
           })}
           {streaming ? (
             <span
@@ -224,8 +231,12 @@ function AgentMessage({
             <Tooltip content={describeUsage(usage).join('\n')}>
               <span tabIndex={0} className="inline-flex">
                 <Badge tone="neutral">
-                  {usage.totalTokens !== undefined ? t('chat.tokens', { count: formatNumber(usage.totalTokens) }) : 'uso'}
-                  {cost ? ` · ${cost.estimated ? '≈ ' : ''}${usage.currency ?? 'USD'} ${cost.value.toFixed(4)}` : ''}
+                  {usage.totalTokens !== undefined
+                    ? t('chat.tokens', { count: formatNumber(usage.totalTokens) })
+                    : 'uso'}
+                  {cost
+                    ? ` · ${cost.estimated ? '≈ ' : ''}${usage.currency ?? 'USD'} ${cost.value.toFixed(4)}`
+                    : ''}
                 </Badge>
               </span>
             </Tooltip>
@@ -281,7 +292,10 @@ function TechnicalBlock({
 
   return (
     <section
-      className={clsx('ch-anim-fade ml-[34px] rounded-[var(--radius-md)] border', wide ? 'ch-prose-wide' : 'ch-prose')}
+      className={clsx(
+        'ch-anim-fade ml-[34px] rounded-[var(--radius-md)] border',
+        wide ? 'ch-prose-wide' : 'ch-prose',
+      )}
       style={{ background: 'var(--surface-1)', borderColor }}
     >
       <button
@@ -322,7 +336,9 @@ function ReasoningBlock({ item }: { item: ConversationItem }) {
       <div className="text-[12.5px] leading-relaxed text-[var(--text-muted)]">
         {renderMarkdown(item.text ?? '', {
           onOpenLink,
-          renderCodeBlock: (code, language, index) => <CodeBlock key={index} code={code} language={language} />,
+          renderCodeBlock: (code, language, index) => (
+            <CodeBlock key={index} code={code} language={language} />
+          ),
         })}
       </div>
       <p className="mt-2 border-t pt-2 text-[11px] leading-snug text-[var(--text-faint)]">
@@ -452,7 +468,9 @@ function ToolBlock({ item, developerMode }: { item: ConversationItem; developerM
         </span>
       }
     >
-      {tool?.error ? <p className="mb-2 text-[12.5px] leading-snug text-[var(--danger)]">{tool.error}</p> : null}
+      {tool?.error ? (
+        <p className="mb-2 text-[12.5px] leading-snug text-[var(--danger)]">{tool.error}</p>
+      ) : null}
       {tool?.arguments !== undefined ? (
         <div className="mb-2">
           <p className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-faint)]">Argumentos</p>
@@ -588,9 +606,16 @@ function describeDelivery(delivery: AttachmentDelivery | undefined): string | un
 }
 
 /** Filtra os resumos de raciocínio conforme a preferência da pessoa. */
-export function useVisibleItems(items: ConversationItem[], showReasoning: boolean): ConversationItem[] {
+export function useVisibleItems(
+  items: ConversationItem[],
+  showReasoning: boolean,
+  revealedItemId?: string,
+): ConversationItem[] {
   return useMemo(
-    () => (showReasoning ? items : items.filter((item) => item.kind !== 'reasoningSummary')),
-    [items, showReasoning],
+    () =>
+      showReasoning
+        ? items
+        : items.filter((item) => item.kind !== 'reasoningSummary' || item.id === revealedItemId),
+    [items, showReasoning, revealedItemId],
   );
 }

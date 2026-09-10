@@ -76,12 +76,7 @@ export interface ProviderDescriptor {
 }
 
 export type ConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'unauthorized'
-  | 'unavailable'
-  | 'error';
+  'disconnected' | 'connecting' | 'connected' | 'unauthorized' | 'unavailable' | 'error';
 
 export interface ProviderConnection {
   providerId: ProviderId;
@@ -390,6 +385,8 @@ export interface FileDiff {
 
 export interface ConversationItem {
   id: ItemId;
+  /** Ordem persistida do item, usada para carregar páginas anteriores. */
+  seq?: number;
   conversationId: ConversationId;
   turnId?: TurnId;
   role: ItemRole;
@@ -467,12 +464,7 @@ export type ErrorCode =
  * ------------------------------------------------------------------ */
 
 export type ApprovalKind =
-  | 'commandExecution'
-  | 'fileWrite'
-  | 'filePatch'
-  | 'networkAccess'
-  | 'additionalPermission'
-  | 'toolCall';
+  'commandExecution' | 'fileWrite' | 'filePatch' | 'networkAccess' | 'additionalPermission' | 'toolCall';
 
 export type ApprovalDecision = 'allowOnce' | 'allowForSession' | 'deny' | 'cancel';
 
@@ -576,7 +568,8 @@ export interface CodexAccountState {
 export interface CodexLoginProgress {
   loginId: string;
   method: CodexAuthMethod;
-  state: 'starting' | 'pendingBrowser' | 'pendingDeviceCode' | 'completed' | 'cancelled' | 'expired' | 'error';
+  state:
+    'starting' | 'pendingBrowser' | 'pendingDeviceCode' | 'completed' | 'cancelled' | 'expired' | 'error';
   /** Fluxo device code. */
   userCode?: string;
   verificationUri?: string;

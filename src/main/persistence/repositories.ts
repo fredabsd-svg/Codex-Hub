@@ -216,7 +216,8 @@ export class ItemRepository {
             errorDetail: {
               code: 'cancelled',
               message: 'Operação incompleta quando o aplicativo foi encerrado.',
-              action: 'Reenvie a mensagem se quiser continuar. Nada foi executado novamente por conta própria.',
+              action:
+                'Reenvie a mensagem se quiser continuar. Nada foi executado novamente por conta própria.',
               retryable: false,
             },
           });
@@ -237,11 +238,16 @@ export class ItemRepository {
     return touched;
   }
 
-  search(query: string, limit = 50): Array<{ conversationId: string; itemId: string; snippet: string }> {
+  search(
+    query: string,
+    limit = 50,
+    conversationId?: string,
+  ): Array<{ conversationId: string; itemId: string; snippet: string }> {
     const needle = query.trim().toLowerCase();
     if (needle === '') return [];
     const out: Array<{ conversationId: string; itemId: string; snippet: string }> = [];
     for (const item of this.store.all<ItemRow>(TABLES.items)) {
+      if (conversationId && item.conversationId !== conversationId) continue;
       const text = item.text;
       if (!text) continue;
       const idx = text.toLowerCase().indexOf(needle);
@@ -319,7 +325,8 @@ export class WorkspaceRepository {
   findByPath(path: string): WorkspaceRow | null {
     const needle = process.platform === 'win32' ? path.toLowerCase() : path;
     return (
-      this.list().find((w) => (process.platform === 'win32' ? w.path.toLowerCase() : w.path) === needle) ?? null
+      this.list().find((w) => (process.platform === 'win32' ? w.path.toLowerCase() : w.path) === needle) ??
+      null
     );
   }
 
@@ -462,7 +469,9 @@ export class PreferencesRepository {
     };
   }
 
-  updateSettings(patch: Partial<Omit<AppSettings, 'layout'>> & { layout?: Partial<AppSettings['layout']> }): AppSettings {
+  updateSettings(
+    patch: Partial<Omit<AppSettings, 'layout'>> & { layout?: Partial<AppSettings['layout']> },
+  ): AppSettings {
     const current = this.getSettings();
     const next: AppSettings = {
       ...current,

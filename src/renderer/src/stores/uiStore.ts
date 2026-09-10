@@ -21,13 +21,7 @@ export interface ToastItem {
 export type RightPanelTab = LayoutPreferences['rightPanelTab'];
 
 export type DialogName =
-  | 'onboarding'
-  | 'catalog'
-  | 'settings'
-  | 'palette'
-  | 'skills'
-  | 'workspaces'
-  | null;
+  'onboarding' | 'catalog' | 'settings' | 'palette' | 'skills' | 'workspaces' | 'conversationSearch' | null;
 
 /** Pedido de confirmação exibido pelo `ConfirmDialog` (substitui `window.confirm`). */
 export interface ConfirmRequest {

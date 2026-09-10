@@ -2,9 +2,9 @@
 
 ```bash
 npm run verify     # typecheck (main + renderer) + lint + testes
-npm run test       # Vitest: unit + integração + renderer  (376 testes)
+npm run test       # Vitest: unit + integração + renderer  (394 testes)
 npm run build      # typecheck + build de produção (necessário antes do e2e)
-npm run test:e2e   # Playwright + Electron (20 testes)
+npm run test:e2e   # Playwright + Electron (23 testes)
 npm run dist:dir   # empacota; habilita o teste do aplicativo empacotado
 npm run test:live  # somente com credencial real (ver abaixo)
 ```
@@ -103,6 +103,15 @@ rascunho gravado ao desmontar; exclusão com diálogo de confirmação próprio;
 totais de tokens e custo no painel de contexto. `highlight.test.tsx` garante que
 o realce de sintaxe nunca perde texto nem interpreta HTML.
 
+`conversationState.test.tsx` cobre envio concorrente, resposta concluída antes
+do ACK, preservação do próximo rascunho, eventos recebidos durante a leitura do
+histórico, páginas com mais de 500 itens e eventos duplicados.
+`workspaceExperience.test.tsx` cobre as sugestões de tarefa, a busca com Ctrl+F
+(inclusive resultados de resumos ocultos) e o painel de contexto em janela
+estreita. `conversationService.test.ts` verifica também o bloqueio de envios
+antes da conexão, falhas de preparação, cancelamento e a busca restrita à
+conversa antes da aplicação do limite de resultados.
+
 ### Exportação e título (`conversationExport.test.ts`)
 
 Markdown com cabeçalho, mensagens, uso por turno e totais (estimativa sempre
@@ -115,7 +124,7 @@ título a partir da primeira mensagem (sem marcação, cortado em palavra).
 | Arquivo | O que exercita |
 | --- | --- |
 | `app.spec.ts` | abre sem o Codex instalado, onboarding, configurações, paleta, catálogo, barra de status, capturas em 1280×720/1440×900/1920×1080 e em janela estreita, ausência de rolagem horizontal, encerramento |
-| `conversation.spec.ts` | cadastra endpoint compatível, escolhe modelo descoberto, envia, vê o streaming e a conclusão, recarrega e reabre a conversa persistida |
+| `conversation.spec.ts` | cadastra endpoint compatível, escolhe modelo descoberto, envia, vê o streaming e a conclusão, recarrega e reabre a conversa persistida, busca mensagens, verifica controles em 940px e sugestões da tela inicial |
 | `tools.spec.ts` | workspace, anexo, modo Executar, chamada de ferramenta com argumentos fragmentados, aprovação (**nada gravado antes de aprovar**), aplicação e diff |
 | `packaged.spec.ts` | aplicativo **empacotado** (ASAR): interface monta, dados do usuário fora do ASAR e do diretório de instalação, renderer sem `require` e sem `ipcRenderer` |
 
@@ -146,6 +155,9 @@ feita com capturas do aplicativo real, produzidas pelos testes e2e em
 | `composer-preenchido.png`, `streaming.png`, `conversa-concluida.png`, `conversa-apos-recarga.png` | envio, streaming, conclusão com tokens e persistência |
 | `catalogo.png` | catálogo com ID exato, preço com unidade e capacidades |
 | `paleta.png` | paleta de comandos |
+| `visao-geral.png` | nova tela inicial com projetos e sugestões |
+| `busca-na-conversa.png` | resultados da busca com Ctrl+F |
+| `painel-compacto.png` | painel de contexto em janela de 940px |
 | `configuracoes-codex.png` | diagnóstico do Codex ausente, com ação concreta |
 | `anexos.png` | anexo no composer |
 | `aprovacao.png` | fila de aprovação com diff proposto e as decisões possíveis |
@@ -161,13 +173,40 @@ cabeçalho quando o painel direito abre; atalho duplicado na paleta; aprovação
 cuja área de decisão ficava abaixo da dobra; painel de alterações que trocava de
 aba sem abrir.
 
-## 5. Limites conhecidos da suíte
+## 5. Integração contínua
+
+O workflow `Verify Codex Hub` executa typecheck, lint, Vitest, empacotamento
+Linux e os testes reais do Electron em display virtual. Depois, o job Windows
+gera o instalador NSIS e o portable e verifica a inicialização do aplicativo
+empacotado. Relatórios e capturas ficam no artefato `electron-test-results`;
+os executáveis ficam em `codex-hub-windows` durante 14 dias.
+
+O teste empacotado usa a versão do `package.json` e reconhece Windows e Linux.
+`CODEX_HUB_PACKAGED_EXECUTABLE` permite verificar outro caminho explicitamente.
+A ausência do executável gera um teste ignorado, nunca uma aprovação.
+
+## 6. Limites conhecidos da suíte
 
 - Sem conta real do OpenRouter, o caminho autenticado (streaming com chave,
   crédito, custo relatado) fica **implementado sem validação externa**.
 - Sem o Codex CLI, o motor Codex é exercitado apenas com transporte falso, e os
   tipos do protocolo continuam provisórios.
-- `packaged.spec.ts` verifica o pacote gerado nesta máquina (árvore Linux com o
-  mesmo ASAR). O instalador NSIS e o portable do Windows **são gerados** por
-  `npm run dist:win` — inclusive em Linux com Wine — mas instalar e executar em
-  uma máquina Windows real não foi feito aqui.
+- `packaged.spec.ts` verifica a inicialização do pacote e a ponte do renderer.
+  Isso não substitui instalar e desinstalar o NSIS manualmente no Windows.
+- Ambientes que bloqueiam sockets Unix ou não oferecem display não executam
+  o Electron. Os testes de interface real devem rodar em uma máquina com
+  display ou no workflow com Xvfb; jsdom não substitui essa verificação.
+
+## 7. Evidências da versão 0.2.0 nesta rodada
+
+- `npm run verify`: **394 testes aprovados em 27 arquivos**, com typecheck e
+  lint aprovados.
+- `npm run dist:dir`: **aprovado**; build de produção e ASAR Linux gerados.
+- `npx playwright test --list`: 23 testes de Electron descobertos.
+- Execução local do Electron: **bloqueada pelo ambiente**, que não permite os
+  sockets Unix exigidos pelo processo e não oferece display gráfico. As novas
+  capturas de tela ainda não foram produzidas nem inspecionadas.
+- A instalação do GitHub App foi concluída; a integração já consegue criar
+  branches no repositório. A publicação e os testes do workflow estão em curso.
+- A verificação real do Electron, o smoke test Windows e os instaladores da
+  versão 0.2.0 dependem dos resultados publicados no workflow `Verify Codex Hub`.

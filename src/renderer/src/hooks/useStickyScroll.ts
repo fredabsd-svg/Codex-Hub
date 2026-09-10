@@ -13,7 +13,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const NEAR_BOTTOM_PX = 120;
 
-export function useStickyScroll<T>(dependency: T): {
+export function useStickyScroll<T>(
+  dependency: T,
+  conversationId?: string,
+): {
   containerRef: React.RefObject<HTMLDivElement | null>;
   atBottom: boolean;
   scrollToBottom(behavior?: ScrollBehavior): void;
@@ -34,6 +37,8 @@ export function useStickyScroll<T>(dependency: T): {
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
+    stick.current = true;
+    element.scrollTop = element.scrollHeight;
     element.addEventListener('scroll', measure, { passive: true });
     measure();
 
@@ -52,7 +57,7 @@ export function useStickyScroll<T>(dependency: T): {
       element.removeEventListener('scroll', measure);
       observer?.disconnect();
     };
-  }, [measure]);
+  }, [measure, conversationId]);
 
   useEffect(() => {
     const element = containerRef.current;

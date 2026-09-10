@@ -8,7 +8,11 @@
 import { app, clipboard, dialog, shell, type BrowserWindow, type WebContents } from 'electron';
 import { basename, join } from 'node:path';
 import { readFile, stat, writeFile } from 'node:fs/promises';
-import { exportFileName, renderConversationExport, type ConversationExportFormat } from '../../shared/conversationExport';
+import {
+  exportFileName,
+  renderConversationExport,
+  type ConversationExportFormat,
+} from '../../shared/conversationExport';
 import type {
   ApprovalRequest,
   CodexAccountState,
@@ -156,7 +160,11 @@ export function registerIpc(options: RegisterIpcOptions): void {
       ctx.settings.completeOnboarding();
       // Aquece o catálogo em segundo plano.
       void ctx.catalog.refresh(input.providerId).then(() => {
-        ctx.bus.emitApp({ type: 'catalog/invalidated', providerId: input.providerId, at: new Date().toISOString() });
+        ctx.bus.emitApp({
+          type: 'catalog/invalidated',
+          providerId: input.providerId,
+          at: new Date().toISOString(),
+        });
       });
     }
     return merged;
@@ -272,7 +280,9 @@ export function registerIpc(options: RegisterIpcOptions): void {
   };
 
   on('catalog:list', (input: CatalogListInput) => listCatalog(input));
-  on('catalog:refresh', (input: { providerId: string }) => listCatalog({ providerId: input.providerId, forceRefresh: true }));
+  on('catalog:refresh', (input: { providerId: string }) =>
+    listCatalog({ providerId: input.providerId, forceRefresh: true }),
+  );
   on('catalog:addManualModel', (input: AddManualModelInput) =>
     ctx.catalog.addManualModel(input.providerId, input.modelId, input.displayName),
   );
@@ -308,7 +318,11 @@ export function registerIpc(options: RegisterIpcOptions): void {
       ctx.catalog.applyErrorObservation(input.providerId, input.modelId, detail.code, detail.message);
       throw err;
     }
-    ctx.bus.emitApp({ type: 'catalog/invalidated', providerId: input.providerId, at: new Date().toISOString() });
+    ctx.bus.emitApp({
+      type: 'catalog/invalidated',
+      providerId: input.providerId,
+      at: new Date().toISOString(),
+    });
     return listCatalog({ providerId: input.providerId });
   });
 
@@ -345,14 +359,18 @@ export function registerIpc(options: RegisterIpcOptions): void {
     ctx.conversations.list(input.includeArchived ?? false),
   );
   on('conversations:create', (input: CreateConversationInput) => ctx.conversations.create(input));
-  on('conversations:read', (input: { conversationId: string }) => ctx.conversations.read(input.conversationId));
+  on('conversations:read', (input: { conversationId: string }) =>
+    ctx.conversations.read(input.conversationId),
+  );
   on('conversations:items', (input: { conversationId: string; limit?: number; beforeSeq?: number }) =>
     ctx.conversations.items(input.conversationId, { limit: input.limit, beforeSeq: input.beforeSeq }),
   );
   on('conversations:rename', (input: { conversationId: string; title: string }) =>
     ctx.conversations.rename(input.conversationId, input.title),
   );
-  on('conversations:archive', (input: { conversationId: string }) => ctx.conversations.archive(input.conversationId, true));
+  on('conversations:archive', (input: { conversationId: string }) =>
+    ctx.conversations.archive(input.conversationId, true),
+  );
   on('conversations:unarchive', (input: { conversationId: string }) =>
     ctx.conversations.archive(input.conversationId, false),
   );
@@ -363,8 +381,8 @@ export function registerIpc(options: RegisterIpcOptions): void {
   on('conversations:setFavorite', (input: { conversationId: string; favorite: boolean }) =>
     ctx.conversations.setFavorite(input.conversationId, input.favorite),
   );
-  on('conversations:search', (input: { query: string; limit?: number }) =>
-    ctx.conversations.search(input.query, input.limit),
+  on('conversations:search', (input: { query: string; limit?: number; conversationId?: string }) =>
+    ctx.conversations.search(input.query, input.limit, input.conversationId),
   );
   on('conversations:export', async (input: { conversationId: string; format: ConversationExportFormat }) => {
     const conversation = ctx.conversations.read(input.conversationId);
@@ -391,22 +409,32 @@ export function registerIpc(options: RegisterIpcOptions): void {
     logger.info('ipc', 'Conversa exportada', { format: input.format });
     return { path: result.filePath };
   });
-  on('conversations:saveDraft', (input: { conversationId: string; text: string; attachmentIds: string[] }) => {
-    ctx.conversations.saveDraft(input.conversationId, input.text, input.attachmentIds);
-    return { saved: true };
-  });
-  on('conversations:readDraft', (input: { conversationId: string }) => ctx.conversations.readDraft(input.conversationId));
-  on('conversations:setParameters', (input: { conversationId: string; parameters: Record<string, unknown> }) =>
-    ctx.conversations.setParameters(input.conversationId, input.parameters as never),
+  on(
+    'conversations:saveDraft',
+    (input: { conversationId: string; text: string; attachmentIds: string[] }) => {
+      ctx.conversations.saveDraft(input.conversationId, input.text, input.attachmentIds);
+      return { saved: true };
+    },
+  );
+  on('conversations:readDraft', (input: { conversationId: string }) =>
+    ctx.conversations.readDraft(input.conversationId),
+  );
+  on(
+    'conversations:setParameters',
+    (input: { conversationId: string; parameters: Record<string, unknown> }) =>
+      ctx.conversations.setParameters(input.conversationId, input.parameters as never),
   );
   on('conversations:setMode', (input: { conversationId: string; mode: 'chat' | 'plan' | 'execute' }) =>
     ctx.conversations.setMode(input.conversationId, input.mode),
   );
-  on('conversations:setWorkspace', async (input: { conversationId: string; workspacePath: string | null }) => {
-    const updated = await ctx.conversations.setWorkspace(input.conversationId, input.workspacePath);
-    ctx.bus.emitApp({ type: 'workspaces/updated', at: new Date().toISOString() });
-    return updated;
-  });
+  on(
+    'conversations:setWorkspace',
+    async (input: { conversationId: string; workspacePath: string | null }) => {
+      const updated = await ctx.conversations.setWorkspace(input.conversationId, input.workspacePath);
+      ctx.bus.emitApp({ type: 'workspaces/updated', at: new Date().toISOString() });
+      return updated;
+    },
+  );
 
   /* ------------------------------------------------------------------ *
    * Turnos
@@ -582,7 +610,9 @@ export function registerIpc(options: RegisterIpcOptions): void {
 
   on('shell:showItemInFolder', (input: { path: string }) => {
     // Só caminhos dentro de algum workspace registrado.
-    const authorized = ctx.workspaces.listRaw().some((row) => ctx.workspaces.guardFor(row.path).contains(input.path));
+    const authorized = ctx.workspaces
+      .listRaw()
+      .some((row) => ctx.workspaces.guardFor(row.path).contains(input.path));
     if (!authorized) {
       throw appError('workspaceDenied', {
         message: 'Só é possível revelar arquivos que estão dentro de um workspace registrado.',

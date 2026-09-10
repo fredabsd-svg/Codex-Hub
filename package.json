@@ -1,6 +1,6 @@
 {
   "name": "codex-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Codex Hub — aplicativo desktop para conversar, programar e executar tarefas com múltiplos provedores de modelos (OpenRouter em destaque) e o Codex App Server.",
   "author": "Codex Hub",

@@ -267,7 +267,10 @@ export interface IpcContract {
   'catalog:list': { input: CatalogListInput; output: ModelCatalogPage };
   'catalog:refresh': { input: { providerId: ProviderId }; output: ModelCatalogPage };
   'catalog:addManualModel': { input: AddManualModelInput; output: ModelCatalogPage };
-  'catalog:setFavorite': { input: { providerId: ProviderId; modelId: string; favorite: boolean }; output: string[] };
+  'catalog:setFavorite': {
+    input: { providerId: ProviderId; modelId: string; favorite: boolean };
+    output: string[];
+  };
   'catalog:probeCapability': { input: CapabilityProbeInput; output: ModelCatalogPage };
 
   'codex:runtime': { input: void; output: CodexRuntimeInfo };
@@ -288,7 +291,10 @@ export interface IpcContract {
     input: { conversationId: ConversationId; limit?: number; beforeSeq?: number };
     output: ConversationItem[];
   };
-  'conversations:rename': { input: { conversationId: ConversationId; title: string }; output: ConversationSummary };
+  'conversations:rename': {
+    input: { conversationId: ConversationId; title: string };
+    output: ConversationSummary;
+  };
   'conversations:archive': { input: { conversationId: ConversationId }; output: ConversationSummary };
   'conversations:unarchive': { input: { conversationId: ConversationId }; output: ConversationSummary };
   'conversations:delete': { input: { conversationId: ConversationId }; output: { deleted: boolean } };
@@ -297,7 +303,10 @@ export interface IpcContract {
     input: { conversationId: ConversationId; favorite: boolean };
     output: ConversationSummary;
   };
-  'conversations:search': { input: { query: string; limit?: number }; output: SearchConversationsResult };
+  'conversations:search': {
+    input: { query: string; limit?: number; conversationId?: string };
+    output: SearchConversationsResult;
+  };
   'conversations:export': {
     input: { conversationId: ConversationId; format: ConversationExportFormat };
     /** `path` é null quando a pessoa cancelou o diálogo de salvar. */
@@ -349,7 +358,10 @@ export interface IpcContract {
   'attachments:prepare': { input: PrepareAttachmentsInput; output: AttachmentRef[] };
   'attachments:prepareFromPaths': { input: PrepareAttachmentsInput; output: AttachmentRef[] };
   'attachments:prepareFromClipboardImage': { input: PrepareClipboardImageInput; output: AttachmentRef[] };
-  'attachments:discard': { input: { conversationId: ConversationId; attachmentId: string }; output: { discarded: boolean } };
+  'attachments:discard': {
+    input: { conversationId: ConversationId; attachmentId: string };
+    output: { discarded: boolean };
+  };
 
   'diagnostics:report': { input: void; output: DiagnosticsReport };
   'diagnostics:export': { input: void; output: { path: string | null } };

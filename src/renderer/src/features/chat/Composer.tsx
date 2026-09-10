@@ -45,7 +45,10 @@ export function Composer({
   registerHandle(handle: ComposerHandle | null): void;
 }) {
   const draft = useConversationStore((state) => (conversation ? state.drafts[conversation.id] : undefined));
-  const runtime = useConversationStore((state) => (conversation ? state.runtime[conversation.id] : undefined));
+  const runtime = useConversationStore((state) =>
+    conversation ? state.runtime[conversation.id] : undefined,
+  );
+  const sending = useConversationStore((state) => !!(conversation && state.sending[conversation.id]));
   const setDraftText = useConversationStore((state) => state.setDraftText);
   const persistDraft = useConversationStore((state) => state.persistDraft);
   const addAttachments = useConversationStore((state) => state.addAttachments);
@@ -147,6 +150,7 @@ export function Composer({
     if (text.trim() === '' && attachments.length === 0) return;
 
     const asSteer = intent === 'steer' && running && steerSupported;
+    if (sending || attaching || interrupting || (running && !asSteer)) return;
     const ok = await send({
       conversationId: conversation.id,
       text,
@@ -160,7 +164,22 @@ export function Composer({
       setIntent('newTurn');
       window.setTimeout(autoGrow, 0);
     }
-  }, [conversation, composing, text, attachments, intent, running, steerSupported, send, autoGrow, skills.length, enabledSkills]);
+  }, [
+    conversation,
+    composing,
+    text,
+    attachments,
+    intent,
+    running,
+    steerSupported,
+    send,
+    autoGrow,
+    skills.length,
+    enabledSkills,
+    sending,
+    attaching,
+    interrupting,
+  ]);
 
   useEffect(() => {
     registerHandle({
@@ -231,7 +250,13 @@ export function Composer({
   };
 
   const disabled = !conversation;
-  const canSend = !disabled && (text.trim() !== '' || attachments.length > 0);
+  const canSend =
+    !disabled &&
+    !sending &&
+    !attaching &&
+    !interrupting &&
+    (!running || (intent === 'steer' && steerSupported)) &&
+    (text.trim() !== '' || attachments.length > 0);
   const length = text.length;
 
   return (
@@ -271,7 +296,9 @@ export function Composer({
                     <IconFile size={12} className="flex-none text-[var(--text-faint)]" />
                     <span className="max-w-[220px] truncate text-[var(--text)]">{attachment.fileName}</span>
                     {attachment.sizeBytes !== undefined ? (
-                      <span className="text-[11px] text-[var(--text-faint)]">{formatBytes(attachment.sizeBytes)}</span>
+                      <span className="text-[11px] text-[var(--text-faint)]">
+                        {formatBytes(attachment.sizeBytes)}
+                      </span>
                     ) : null}
                     {attachment.error ? <Badge tone="danger">falhou</Badge> : null}
                     <IconButton
@@ -296,7 +323,7 @@ export function Composer({
               value={intent}
               onChange={setIntent}
               options={[
-                { value: 'newTurn', label: t('composer.newTurn'), hint: 'Enfileira como um novo turno.' },
+                { value: 'newTurn', label: t('composer.newTurn'), hint: t('workspaceExperience.waitToSend') },
                 {
                   value: 'steer',
                   label: t('composer.steerTurn'),
@@ -336,7 +363,11 @@ export function Composer({
               side="top"
               width={320}
               trigger={
-                <IconButton label={t('composer.skills')} active={enabledSkills.length > 0} disabled={disabled}>
+                <IconButton
+                  label={t('composer.skills')}
+                  active={enabledSkills.length > 0}
+                  disabled={disabled}
+                >
                   <IconSkill />
                 </IconButton>
               }
@@ -439,12 +470,18 @@ export function Composer({
           <span className="hidden flex-none items-center gap-1 sm:inline-flex">
             {sendWithEnter ? (
               <>
-                <Kbd>Enter</Kbd> {t('composer.send').replace(/\s*\(.*\)$/, '').toLowerCase()} · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd>{' '}
-                nova linha
+                <Kbd>Enter</Kbd>{' '}
+                {t('composer.send')
+                  .replace(/\s*\(.*\)$/, '')
+                  .toLowerCase()}{' '}
+                · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd> nova linha
               </>
             ) : (
               <>
-                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd> {t('composer.send').replace(/\s*\(.*\)$/, '').toLowerCase()}
+                <Kbd>Ctrl</Kbd>+<Kbd>Enter</Kbd>{' '}
+                {t('composer.send')
+                  .replace(/\s*\(.*\)$/, '')
+                  .toLowerCase()}
               </>
             )}
           </span>

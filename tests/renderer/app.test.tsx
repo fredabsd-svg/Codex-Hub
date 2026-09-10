@@ -22,7 +22,13 @@ function resetStores(): void {
     approvals: [],
     loadingItems: false,
   });
-  useCatalogStore.setState({ pages: {}, loading: {}, favorites: [], filters: DEFAULT_FILTERS, probing: null });
+  useCatalogStore.setState({
+    pages: {},
+    loading: {},
+    favorites: [],
+    filters: DEFAULT_FILTERS,
+    probing: null,
+  });
   useUiStore.setState({ dialog: null, toasts: [], autoScroll: true });
   useAppStore.setState({ ready: false, bootError: null, skills: [], usage: {}, notices: [] });
   resetOverlayStack();
@@ -42,7 +48,9 @@ describe('App — inicialização', () => {
     bridge = installFakeBridge({ conversations: [conversationFixture()] });
     render(<App />);
     expect(screen.getByText(/Carregando o aplicativo/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('navigation', { name: /Navegação principal/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('navigation', { name: /Navegação principal/i })).toBeInTheDocument(),
+    );
     expect(screen.getByRole('button', { name: /Nova conversa/i })).toBeInTheDocument();
   });
 
@@ -58,7 +66,9 @@ describe('App — inicialização', () => {
       },
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Não foi possível abrir os dados locais/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Não foi possível abrir os dados locais/)).toBeInTheDocument(),
+    );
     expect(screen.getByText(/Verifique o espaço em disco/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeInTheDocument();
   });
@@ -74,7 +84,9 @@ describe('App — inicialização', () => {
       connections: [{ providerId: 'openrouter', state: 'disconnected', message: 'Nenhuma credencial.' }],
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByRole('dialog', { name: /Escolha por onde começar/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: /Escolha por onde começar/i })).toBeInTheDocument(),
+    );
     // OpenRouter é a primeira opção e não exige conta ChatGPT.
     const dialog = screen.getByRole('dialog', { name: /Escolha por onde começar/i });
     expect(within(dialog).getByText('OpenRouter')).toBeInTheDocument();
@@ -105,8 +117,14 @@ describe('App — conversas e streaming', () => {
       items: { c1: [itemFixture({ text: 'Conteúdo da primeira.' })] },
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
     await waitFor(() => expect(screen.getByText('Conteúdo da primeira.')).toBeInTheDocument());
   });
 
@@ -114,8 +132,14 @@ describe('App — conversas e streaming', () => {
     const conversation = conversationFixture();
     bridge = installFakeBridge({ conversations: [conversation], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
 
     const base = {
       seq: 1,
@@ -125,7 +149,12 @@ describe('App — conversas e streaming', () => {
       conversationId: 'c1',
       turnId: 't1',
     };
-    bridge.emitDomain({ ...base, type: 'item/started', itemId: 'i9', item: itemFixture({ id: 'i9', text: '', status: 'streaming' }) });
+    bridge.emitDomain({
+      ...base,
+      type: 'item/started',
+      itemId: 'i9',
+      item: itemFixture({ id: 'i9', text: '', status: 'streaming' }),
+    });
     bridge.emitDomain({ ...base, seq: 2, type: 'item/textDelta', itemId: 'i9', delta: 'Olá' });
     bridge.emitDomain({ ...base, seq: 3, type: 'item/textDelta', itemId: 'i9', delta: ' mundo' });
 
@@ -135,8 +164,14 @@ describe('App — conversas e streaming', () => {
   it('mostra o estado do turno e o botão de interromper', async () => {
     bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
 
     bridge.emitDomain({
       seq: 1,
@@ -155,8 +190,14 @@ describe('App — conversas e streaming', () => {
     // disparava dois envios — o segundo era recusado com "já existe um turno".
     bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
 
     const textarea = screen.getByRole('textbox', { name: /Descreva a tarefa/i });
     await userEvent.type(textarea, 'uma mensagem só');
@@ -190,8 +231,14 @@ describe('App — conversas e streaming', () => {
       },
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
     await waitFor(() => expect(screen.getByText(/crédito insuficiente/)).toBeInTheDocument());
     expect(screen.getByText(/Adicione crédito/)).toBeInTheDocument();
   });
@@ -208,7 +255,9 @@ describe('App — atalhos e navegação por teclado', () => {
     expect(palette).toBeInTheDocument();
 
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Comandos e busca/i })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Comandos e busca/i })).not.toBeInTheDocument(),
+    );
   });
 
   it('Ctrl+, abre as configurações', async () => {
@@ -222,8 +271,14 @@ describe('App — atalhos e navegação por teclado', () => {
   it('Esc sem sobreposição aberta interrompe o turno ativo', async () => {
     bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(bridge.callsTo('turn:interrupt').length).toBeGreaterThan(0));
   });
@@ -231,8 +286,14 @@ describe('App — atalhos e navegação por teclado', () => {
   it('Esc com diálogo aberto NÃO interrompe o turno', async () => {
     bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
 
     await userEvent.keyboard('{Control>}k{/Control}');
     await screen.findByRole('dialog', { name: /Comandos e busca/i });
@@ -257,8 +318,14 @@ describe('App — barra de status', () => {
   it('mostra o motor ativo e a política efetiva', async () => {
     bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] } });
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
     await waitFor(() => expect(screen.getByText('Motor direto')).toBeInTheDocument());
     expect(screen.getByText(/Política efetiva: somente leitura/)).toBeInTheDocument();
   });

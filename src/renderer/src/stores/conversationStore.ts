@@ -47,6 +47,15 @@ interface Draft {
   attachments: AttachmentRef[];
 }
 
+interface HistoryPage {
+  loaded: boolean;
+  loading: boolean;
+  hasMore: boolean;
+}
+
+const HISTORY_PAGE_SIZE = 500;
+const EMPTY_HISTORY: HistoryPage = { loaded: false, loading: false, hasMore: false };
+
 interface ConversationState {
   conversations: ConversationSummary[];
   activeId: string | null;
@@ -55,15 +64,24 @@ interface ConversationState {
   drafts: Record<string, Draft>;
   approvals: ApprovalRequest[];
   loadingItems: boolean;
+  history: Record<string, HistoryPage>;
+  sending: Record<string, boolean>;
+  focusedItem: { conversationId: string; itemId: string; version: number } | null;
 
   refresh(includeArchived?: boolean): Promise<void>;
   setActive(conversationId: string | null): Promise<void>;
+  loadHistory(conversationId: string, older?: boolean): Promise<void>;
+  revealItem(conversationId: string, itemId: string): Promise<void>;
   create(input: CreateConversationInput): Promise<ConversationSummary | null>;
   rename(conversationId: string, title: string): Promise<void>;
   archive(conversationId: string, archived: boolean): Promise<void>;
   remove(conversationId: string): Promise<void>;
   setFavorite(conversationId: string, favorite: boolean): Promise<void>;
-  fork(conversationId: string, fromItemId?: string, options?: { exclusive?: boolean; silent?: boolean }): Promise<ConversationSummary | null>;
+  fork(
+    conversationId: string,
+    fromItemId?: string,
+    options?: { exclusive?: boolean; silent?: boolean },
+  ): Promise<ConversationSummary | null>;
   /** Exporta a conversa para um arquivo escolhido pela pessoa. */
   exportConversation(conversationId: string, format: ConversationExportFormat): Promise<void>;
   /** Copia a conversa inteira como Markdown para a área de transferência. */
@@ -110,7 +128,9 @@ let frame: number | null = null;
 function scheduleFlush(apply: () => void): void {
   if (frame !== null) return;
   const schedule =
-    typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb: () => void) => setTimeout(cb, 16);
+    typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb: () => void) => setTimeout(cb, 16);
   frame = schedule(() => {
     frame = null;
     apply();
@@ -118,6 +138,7 @@ function scheduleFlush(apply: () => void): void {
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => {
+  const historyRequests = new Map<string, Promise<void>>();
   const flushDeltas = (): void => {
     if (pending.size === 0) return;
     const batch = new Map(pending);
@@ -190,6 +211,9 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     drafts: {},
     approvals: [],
     loadingItems: false,
+    history: {},
+    sending: {},
+    focusedItem: null,
 
     async refresh(includeArchived = true) {
       try {
@@ -201,28 +225,110 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     },
 
     async setActive(conversationId) {
-      set({ activeId: conversationId });
+      set({
+        activeId: conversationId,
+        focusedItem: null,
+        loadingItems: !!(conversationId && get().history[conversationId]?.loading),
+      });
       if (!conversationId) return;
-      if (get().items[conversationId] === undefined) {
-        set({ loadingItems: true });
-        try {
-          const items = await invoke('conversations:items', { conversationId, limit: 500 });
-          set((state) => ({ items: { ...state.items, [conversationId]: items } }));
-        } catch (err) {
-          useUiStore.getState().pushError(errorOf(err), 'Não foi possível carregar o histórico');
-        } finally {
-          set({ loadingItems: false });
-        }
-      }
+      const history =
+        get().items[conversationId] === undefined || !get().history[conversationId]?.loaded
+          ? get().loadHistory(conversationId)
+          : Promise.resolve();
       if (get().drafts[conversationId] === undefined) {
         try {
           const draft = await invoke('conversations:readDraft', { conversationId });
-          set((state) => ({ drafts: { ...state.drafts, [conversationId]: draft } }));
+          set((state) =>
+            state.drafts[conversationId] || !state.conversations.some((c) => c.id === conversationId)
+              ? state
+              : { drafts: { ...state.drafts, [conversationId]: draft } },
+          );
         } catch {
-          set((state) => ({ drafts: { ...state.drafts, [conversationId]: { text: '', attachments: [] } } }));
+          // Um rascunho que já começou a ser editado tem prioridade.
         }
       }
+      await history;
       await get().loadPolicy(conversationId);
+    },
+
+    async loadHistory(conversationId, older = false) {
+      const pendingRequest = historyRequests.get(conversationId);
+      if (pendingRequest) return pendingRequest;
+      const page = get().history[conversationId] ?? EMPTY_HISTORY;
+      const firstSeq = get().items[conversationId]?.find((item) => item.seq !== undefined)?.seq;
+      if (older && (!page.hasMore || firstSeq === undefined)) return;
+      set((state) => ({
+        history: { ...state.history, [conversationId]: { ...page, loading: true } },
+        loadingItems: state.activeId === conversationId ? true : state.loadingItems,
+      }));
+      const request = (async () => {
+        try {
+          const fetched = await invoke('conversations:items', {
+            conversationId,
+            limit: HISTORY_PAGE_SIZE,
+            ...(older ? { beforeSeq: firstSeq } : {}),
+          });
+          flushDeltas();
+          set((state) => {
+            if (!state.conversations.some((c) => c.id === conversationId)) return state;
+            // Eventos recebidos durante a leitura são mais recentes que o snapshot.
+            const merged = [
+              ...new Map(
+                [...fetched, ...(state.items[conversationId] ?? [])].map((item) => [item.id, item]),
+              ).values(),
+            ];
+            merged.sort((a, b) =>
+              a.seq !== undefined && b.seq !== undefined
+                ? a.seq - b.seq
+                : a.createdAt.localeCompare(b.createdAt),
+            );
+            return {
+              items: { ...state.items, [conversationId]: merged },
+              history: {
+                ...state.history,
+                [conversationId]: {
+                  loaded: true,
+                  loading: false,
+                  hasMore: fetched.length === HISTORY_PAGE_SIZE && (fetched[0]?.seq ?? 0) > 1,
+                },
+              },
+            };
+          });
+        } catch (err) {
+          useUiStore.getState().pushError(errorOf(err), 'Não foi possível carregar o histórico');
+        } finally {
+          historyRequests.delete(conversationId);
+          set((state) => ({
+            history: state.history[conversationId]
+              ? { ...state.history, [conversationId]: { ...state.history[conversationId]!, loading: false } }
+              : state.history,
+            loadingItems: state.activeId === conversationId ? false : state.loadingItems,
+          }));
+        }
+      })();
+      historyRequests.set(conversationId, request);
+      return request;
+    },
+
+    async revealItem(conversationId, itemId) {
+      await get().setActive(conversationId);
+      while (
+        get().activeId === conversationId &&
+        !get().items[conversationId]?.some((item) => item.id === itemId) &&
+        get().history[conversationId]?.hasMore
+      ) {
+        const count = get().items[conversationId]?.length ?? 0;
+        await get().loadHistory(conversationId, true);
+        if ((get().items[conversationId]?.length ?? 0) <= count) break;
+      }
+      if (
+        get().activeId === conversationId &&
+        get().items[conversationId]?.some((item) => item.id === itemId)
+      ) {
+        set((state) => ({
+          focusedItem: { conversationId, itemId, version: (state.focusedItem?.version ?? 0) + 1 },
+        }));
+      }
     },
 
     async create(input) {
@@ -232,6 +338,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           conversations: [conversation, ...state.conversations],
           items: { ...state.items, [conversation.id]: [] },
           drafts: { ...state.drafts, [conversation.id]: { text: '', attachments: [] } },
+          history: { ...state.history, [conversation.id]: { loaded: true, loading: false, hasMore: false } },
         }));
         await get().setActive(conversation.id);
         return conversation;
@@ -272,14 +379,17 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           const items = { ...state.items };
           const drafts = { ...state.drafts };
           const runtime = { ...state.runtime };
+          const history = { ...state.history };
           delete items[conversationId];
           delete drafts[conversationId];
           delete runtime[conversationId];
+          delete history[conversationId];
           return {
             conversations: state.conversations.filter((c) => c.id !== conversationId),
             items,
             drafts,
             runtime,
+            history,
             activeId: state.activeId === conversationId ? null : state.activeId,
           };
         });
@@ -341,7 +451,8 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       const conversation = get().conversations.find((c) => c.id === conversationId);
       if (!conversation) return;
       try {
-        const items = get().items[conversationId] ?? (await invoke('conversations:items', { conversationId }));
+        const items =
+          get().items[conversationId] ?? (await invoke('conversations:items', { conversationId }));
         const text = renderConversationMarkdown({ conversation, items });
         await invoke('clipboard:writeText', { text });
         useUiStore.getState().pushToast({ tone: 'success', title: t('chat.copiedConversation') });
@@ -444,18 +555,43 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     },
 
     async send(input) {
+      const id = input.conversationId;
+      if (get().sending[id]) return false;
+      const previous = get().runtime[id] ?? EMPTY_RUNTIME;
+      set((state) => ({ sending: { ...state.sending, [id]: true } }));
+      if (!input.asSteer) patchRuntime(id, { status: 'connecting', lastError: undefined });
       try {
-        await invoke('turn:send', input);
-        set((state) => ({
-          drafts: { ...state.drafts, [input.conversationId]: { text: '', attachments: [] } },
-        }));
-        patchRuntime(input.conversationId, { status: 'running', lastError: undefined });
+        const result = await invoke('turn:send', input);
+        set((state) => {
+          const draft = state.drafts[id];
+          if (!draft) return state;
+          const sentIds = new Set(input.asSteer ? [] : (input.attachmentIds ?? []));
+          return {
+            drafts: {
+              ...state.drafts,
+              [id]: {
+                text: draft.text === input.text ? '' : draft.text,
+                attachments: draft.attachments.filter((attachment) => !sentIds.has(attachment.id)),
+              },
+            },
+          };
+        });
+        // Uma resposta rápida pode já ter concluído antes do ACK do IPC.
+        if ((get().runtime[id]?.lastSeq ?? 0) === previous.lastSeq) {
+          patchRuntime(id, { status: 'running', activeTurnId: result.turnId, lastError: undefined });
+        }
+        // O main limpa o rascunho aceito. Regrava uma próxima mensagem que
+        // tenha sido digitada durante a conexão, para preservar também no disco.
+        await get().persistDraft(id);
         return true;
       } catch (err) {
         const detail = errorOf(err);
-        patchRuntime(input.conversationId, { lastError: detail });
+        const unchanged = (get().runtime[id]?.lastSeq ?? 0) === previous.lastSeq;
+        patchRuntime(id, { ...(unchanged ? { status: previous.status } : {}), lastError: detail });
         useUiStore.getState().pushError(detail, 'A mensagem não foi enviada');
         return false;
+      } finally {
+        set((state) => ({ sending: { ...state.sending, [id]: false } }));
       }
     },
 
@@ -501,6 +637,8 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     applyEvent(event) {
       const conversationId = event.conversationId;
       const current = get().runtime[conversationId] ?? EMPTY_RUNTIME;
+      // Eventos repetidos não podem duplicar texto nem reabrir um turno concluído.
+      if (event.seq <= current.lastSeq) return;
       // Detecção de lacuna na sequência: informa em vez de esconder.
       const gapDetected = current.gapDetected || (current.lastSeq > 0 && event.seq > current.lastSeq + 1);
       if (event.seq > current.lastSeq) {
@@ -526,7 +664,11 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           }));
           break;
         case 'turn/started':
-          patchRuntime(conversationId, { activeTurnId: event.turnId, status: 'running', lastError: undefined });
+          patchRuntime(conversationId, {
+            activeTurnId: event.turnId,
+            status: 'running',
+            lastError: undefined,
+          });
           break;
         case 'turn/completed':
           flushDeltas();
@@ -584,7 +726,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           break;
         case 'diff/updated':
           patchRuntime(conversationId, { diffs: event.files });
-          if (event.files.length > 0) {
+          if (event.files.length > 0 && get().activeId === conversationId) {
             // Alteração em arquivo é o resultado principal do modo Executar:
             // o painel abre na aba de diff em vez de só trocar a aba escondida.
             // Em janelas estreitas o layout continua recolhendo o painel.

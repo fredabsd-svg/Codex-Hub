@@ -8,18 +8,18 @@
  * principais. Uma conversa vazia oferece sugestões que preenchem o composer.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { ConversationItem, ConversationSummary } from '@shared/domain';
-import { t, tList } from '../../i18n';
+import { t } from '../../i18n';
 import { useStickyScroll } from '../../hooks/useStickyScroll';
 import { useAppStore } from '../../stores/appStore';
 import { useCatalogStore } from '../../stores/catalogStore';
 import { useConversationStore } from '../../stores/conversationStore';
-import { useUiStore } from '../../stores/uiStore';
-import { Badge, Button, EmptyState, Kbd, Spinner } from '../../components/ui/primitives';
-import { IconArrowDown, IconFolder, IconList, IconPlus, IconSpark } from '../../components/ui/icons';
+import { Badge, Button, EmptyState, Spinner } from '../../components/ui/primitives';
+import { IconArrowDown, IconSpark } from '../../components/ui/icons';
 import { MessageItem, useVisibleItems } from './MessageItem';
 import { ApprovalQueue } from '../approvals/ApprovalQueue';
+import { HomeScreen, TaskCards } from './HomeScreen';
 
 const EMPTY_ITEMS: ConversationItem[] = [];
 
@@ -29,38 +29,51 @@ export function MessageList({
   onFocusComposer,
 }: {
   conversation: ConversationSummary | null;
-  onNewConversation?(): void;
+  onNewConversation?(prompt?: string, workspacePath?: string): void;
   onFocusComposer?(): void;
 }) {
   const items = useConversationStore((state) => (conversation ? state.items[conversation.id] : undefined));
-  const runtime = useConversationStore((state) => (conversation ? state.runtime[conversation.id] : undefined));
+  const runtime = useConversationStore((state) =>
+    conversation ? state.runtime[conversation.id] : undefined,
+  );
   const loading = useConversationStore((state) => state.loadingItems);
   const fork = useConversationStore((state) => state.fork);
   const setDraftText = useConversationStore((state) => state.setDraftText);
   const developerMode = useAppStore((state) => state.settings.developerMode);
   const showReasoning = useAppStore((state) => state.settings.showReasoningSummaries);
-  const openDialog = useUiStore((state) => state.openDialog);
+  const history = useConversationStore((state) =>
+    conversation ? state.history[conversation.id] : undefined,
+  );
+  const loadHistory = useConversationStore((state) => state.loadHistory);
+  const focusedItem = useConversationStore((state) => state.focusedItem);
+  const restoreScroll = useRef<{ top: number; height: number } | null>(null);
   const pages = useCatalogStore((state) => state.pages);
 
   const approvals = useConversationStore((state) => state.approvals);
 
-  const list = useVisibleItems(useMemo(() => items ?? EMPTY_ITEMS, [items]), showReasoning);
+  const list = useVisibleItems(
+    useMemo(() => items ?? EMPTY_ITEMS, [items]),
+    showReasoning,
+    focusedItem?.conversationId === conversation?.id ? focusedItem?.itemId : undefined,
+  );
   const modelLabel = useMemo(() => {
     if (!conversation) return undefined;
     return pages[conversation.providerId]?.models.find((m) => m.id === conversation.modelId)?.displayName;
   }, [conversation, pages]);
 
   const pendingApprovals = useMemo(
-    () => (conversation ? approvals.filter((request) => request.conversationId === conversation.id).length : 0),
+    () =>
+      conversation ? approvals.filter((request) => request.conversationId === conversation.id).length : 0,
     [approvals, conversation],
   );
   // A fila de aprovação entra na assinatura: uma solicitação nova precisa
   // rolar até ficar visível junto com os botões de decisão.
   const signature = useMemo(
-    () => `${list.length}:${list[list.length - 1]?.text?.length ?? 0}:${runtime?.status ?? ''}:${pendingApprovals}`,
+    () =>
+      `${list.length}:${list[list.length - 1]?.text?.length ?? 0}:${runtime?.status ?? ''}:${pendingApprovals}`,
     [list, runtime?.status, pendingApprovals],
   );
-  const { containerRef, atBottom, scrollToBottom } = useStickyScroll(signature);
+  const { containerRef, atBottom, scrollToBottom } = useStickyScroll(signature, conversation?.id);
 
   const conversationId = conversation?.id;
   const handleFork = useCallback(
@@ -84,41 +97,24 @@ export function MessageList({
     [conversationId, fork, setDraftText, onFocusComposer],
   );
 
-  if (!conversation) {
-    return (
-      <div className="flex flex-1 items-center justify-center overflow-y-auto px-6">
-        <div className="ch-anim-rise flex max-w-[520px] flex-col items-center text-center">
-          <span className="ch-avatar mb-4" style={{ width: 44, height: 44, borderRadius: 14 }} aria-hidden="true">
-            <IconSpark size={22} />
-          </span>
-          <h2 className="text-[18px] font-semibold text-[var(--text)]">{t('chat.homeTitle')}</h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--text-muted)]">{t('chat.homeBody')}</p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <Button variant="primary" iconLeft={<IconPlus />} onClick={onNewConversation}>
-              {t('chat.homeNew')}
-            </Button>
-            <Button variant="secondary" iconLeft={<IconFolder />} onClick={() => openDialog('workspaces')}>
-              {t('chat.homeWorkspace')}
-            </Button>
-            <Button variant="secondary" iconLeft={<IconList />} onClick={() => openDialog('catalog')}>
-              {t('chat.homeCatalog')}
-            </Button>
-          </div>
-          <p className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--text-faint)]">
-            <span>
-              <Kbd>Ctrl</Kbd>+<Kbd>N</Kbd> {t('shortcuts.newConversation').toLowerCase()}
-            </span>
-            <span>
-              <Kbd>Ctrl</Kbd>+<Kbd>K</Kbd> {t('palette.title').toLowerCase()}
-            </span>
-            <span>
-              <Kbd>Ctrl</Kbd>+<Kbd>,</Kbd> {t('settings.title').toLowerCase()}
-            </span>
-          </p>
-        </div>
-      </div>
-    );
-  }
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+    const saved = restoreScroll.current;
+    if (element && saved && !history?.loading) {
+      element.scrollTop = saved.top + element.scrollHeight - saved.height;
+      restoreScroll.current = null;
+    }
+  }, [items, history?.loading, containerRef]);
+
+  useEffect(() => {
+    if (!focusedItem || focusedItem.conversationId !== conversationId) return;
+    const element = document.getElementById(`conversation-item-${focusedItem.itemId}`);
+    element?.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+    element?.focus({ preventScroll: true });
+  }, [focusedItem, conversationId]);
+
+  if (!conversation)
+    return <HomeScreen onNewConversation={(prompt, path) => onNewConversation?.(prompt, path)} />;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -136,6 +132,25 @@ export function MessageList({
           className="mx-auto flex w-full flex-col"
           style={{ maxWidth: 'var(--chat-max-width)', gap: 'var(--message-gap)' }}
         >
+          {history?.hasMore ? (
+            <div className="ch-history-control">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={history.loading}
+                onClick={() => {
+                  const element = containerRef.current;
+                  if (element)
+                    restoreScroll.current = { top: element.scrollTop, height: element.scrollHeight };
+                  void loadHistory(conversation.id, true);
+                }}
+              >
+                {history.loading ? <Spinner size={12} /> : null} {t('workspaceExperience.olderMessages')}
+              </Button>
+              <p>{t('workspaceExperience.historyPartial')}</p>
+            </div>
+          ) : null}
+
           {loading && list.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-[var(--text-muted)]">
               <Spinner /> {t('common.loading')}
@@ -144,27 +159,18 @@ export function MessageList({
 
           {!loading && list.length === 0 ? (
             <div className="flex flex-col items-center">
-              <EmptyState icon={<IconSpark size={24} />} title={t('chat.emptyTitle')} body={t('chat.emptyBody')} />
-              <div className="-mt-4 w-full max-w-[560px]">
-                <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">
-                  {t('chat.suggestionsTitle')}
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {tList('chat.suggestions').map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      className="ch-chip"
-                      onClick={() => {
-                        setDraftText(conversation.id, suggestion);
-                        onFocusComposer?.();
-                      }}
-                    >
-                      <IconSpark size={12} className="flex-none text-[var(--accent)]" />
-                      <span>{suggestion}</span>
-                    </button>
-                  ))}
-                </div>
+              <EmptyState
+                icon={<IconSpark size={24} />}
+                title={t('chat.emptyTitle')}
+                body={t('chat.emptyBody')}
+              />
+              <div className="w-full mb-6">
+                <TaskCards
+                  onChoose={(prompt) => {
+                    setDraftText(conversation.id, prompt);
+                    onFocusComposer?.();
+                  }}
+                />
               </div>
             </div>
           ) : null}
@@ -176,14 +182,20 @@ export function MessageList({
           ) : null}
 
           {list.map((item) => (
-            <MessageItem
+            <div
               key={item.id}
-              item={item}
-              developerMode={developerMode}
-              modelLabel={item.modelId === conversation.modelId ? modelLabel : undefined}
-              onFork={handleFork}
-              onEdit={handleEdit}
-            />
+              id={`conversation-item-${item.id}`}
+              tabIndex={-1}
+              className={focusedItem?.itemId === item.id ? 'ch-found-message' : undefined}
+            >
+              <MessageItem
+                item={item}
+                developerMode={developerMode}
+                modelLabel={item.modelId === conversation.modelId ? modelLabel : undefined}
+                onFork={handleFork}
+                onEdit={handleEdit}
+              />
+            </div>
           ))}
 
           <ApprovalQueue conversationId={conversation.id} />

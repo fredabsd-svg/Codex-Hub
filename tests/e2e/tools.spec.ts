@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { testElectronArgs } from './launch';
 
 const SCREENSHOT_DIR = join(process.cwd(), 'test-results', 'capturas');
 const MODEL_ID = 'fake/ferramenteiro-1';
@@ -63,7 +64,11 @@ test.beforeAll(async () => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ data: [{ id: MODEL_ID, object: 'model', owned_by: 'testes', context_length: 32_000 }] }));
+      res.end(
+        JSON.stringify({
+          data: [{ id: MODEL_ID, object: 'model', owned_by: 'testes', context_length: 32_000 }],
+        }),
+      );
       return;
     }
     if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
@@ -81,7 +86,14 @@ test.beforeAll(async () => {
               {
                 index: 0,
                 delta: {
-                  tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'apply_file_changes', arguments: '' } }],
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_1',
+                      type: 'function',
+                      function: { name: 'apply_file_changes', arguments: '' },
+                    },
+                  ],
                 },
               },
             ],
@@ -94,7 +106,9 @@ test.beforeAll(async () => {
           i += 1;
           if (chunk === undefined) {
             clearInterval(timer);
-            res.write(sse({ id: 'chatcmpl-tool', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }));
+            res.write(
+              sse({ id: 'chatcmpl-tool', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }),
+            );
             res.write('data: [DONE]\n\n');
             res.end();
             return;
@@ -111,7 +125,12 @@ test.beforeAll(async () => {
       }
 
       // Passo 2 em diante: resposta final em texto.
-      res.write(sse({ id: 'chatcmpl-final', choices: [{ index: 0, delta: { content: 'Alteração aplicada com sucesso.' } }] }));
+      res.write(
+        sse({
+          id: 'chatcmpl-final',
+          choices: [{ index: 0, delta: { content: 'Alteração aplicada com sucesso.' } }],
+        }),
+      );
       res.write(sse({ id: 'chatcmpl-final', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
       res.write('data: [DONE]\n\n');
       res.end();
@@ -126,7 +145,7 @@ test.beforeAll(async () => {
 
   const userData = mkdtempSync(join(tmpdir(), 'codex-hub-tools-'));
   app = await electron.launch({
-    args: ['out/main/main.js', `--user-data-dir=${userData}`],
+    args: [...testElectronArgs, 'out/main/main.js', `--user-data-dir=${userData}`],
     env: {
       ...process.env,
       NODE_ENV: 'production',
@@ -139,13 +158,16 @@ test.beforeAll(async () => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   // Substitui o seletor nativo de arquivos: o teste escolhe os caminhos.
-  await app.evaluate(async ({ dialog }, paths) => {
-    const stub = async (): Promise<{ canceled: boolean; filePaths: string[] }> => ({
-      canceled: false,
-      filePaths: [paths.next ?? ''],
-    });
-    (dialog as unknown as { showOpenDialog: typeof stub }).showOpenDialog = stub;
-  }, { next: workspaceDir });
+  await app.evaluate(
+    async ({ dialog }, paths) => {
+      const stub = async (): Promise<{ canceled: boolean; filePaths: string[] }> => ({
+        canceled: false,
+        filePaths: [paths.next ?? ''],
+      });
+      (dialog as unknown as { showOpenDialog: typeof stub }).showOpenDialog = stub;
+    },
+    { next: workspaceDir },
+  );
 });
 
 test.afterAll(async () => {
@@ -174,9 +196,15 @@ test('prepara provedor, workspace e modo Executar', async () => {
   await expect(onboarding).toBeHidden({ timeout: 30_000 });
 
   await page.getByRole('button', { name: /Nova conversa/i }).click();
-  await page.getByRole('button', { name: /^Modelo: / }).first().click();
+  await page
+    .getByRole('button', { name: /^Modelo: / })
+    .first()
+    .click();
   const picker = page.getByRole('dialog', { name: /^Modelo$/ });
-  await picker.getByRole('button', { name: /Endpoint de teste/ }).first().click();
+  await picker
+    .getByRole('button', { name: /Endpoint de teste/ })
+    .first()
+    .click();
   await picker.locator('[role="option"]', { hasText: MODEL_ID }).first().click();
   await expect(picker).toBeHidden();
 
@@ -217,7 +245,10 @@ test('a ferramenta pede aprovação antes de tocar no disco', async () => {
 });
 
 test('ao aprovar, a alteração é aplicada e o diff aparece', async () => {
-  await page.getByRole('button', { name: /Permitir uma vez/ }).first().click();
+  await page
+    .getByRole('button', { name: /Permitir uma vez/ })
+    .first()
+    .click();
 
   await expect(page.getByText(/Alteração aplicada com sucesso/).first()).toBeVisible({ timeout: 30_000 });
   expect(readFileSync(join(workspaceDir, 'exemplo.txt'), 'utf8')).toContain('linha alterada pela ferramenta');

@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtempSync } from 'node:fs';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { testElectronArgs } from './launch';
 
 const SCREENSHOT_DIR = join(process.cwd(), 'test-results', 'capturas');
 const VIEWPORTS = [
@@ -43,7 +44,7 @@ test.beforeAll(async () => {
   // Perfil isolado: nada toca os dados reais da máquina.
   const userData = mkdtempSync(join(tmpdir(), 'codex-hub-e2e-'));
   app = await electron.launch({
-    args: ['out/main/main.js', `--user-data-dir=${userData}`],
+    args: [...testElectronArgs, 'out/main/main.js', `--user-data-dir=${userData}`],
     env: {
       ...process.env,
       NODE_ENV: 'production',
@@ -62,7 +63,9 @@ test.afterAll(async () => {
 
 test('o aplicativo abre mesmo sem o Codex instalado', async () => {
   // A interface principal monta e não há tela de erro fatal.
-  await expect(page.getByRole('navigation', { name: /Navegação principal/i })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('navigation', { name: /Navegação principal/i })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByRole('button', { name: /Nova conversa/i })).toBeVisible();
 });
 
@@ -86,6 +89,8 @@ test('o onboarding oferece o OpenRouter em primeiro lugar', async () => {
     await dismissOnboarding();
   }
   await expect(page.getByRole('navigation', { name: /Navegação principal/i })).toBeVisible();
+  await page.getByRole('button', { name: /Nova conversa/i }).click();
+  await expect(page.getByRole('log')).toBeVisible();
 });
 
 test('as configurações abrem pelo atalho e mostram as seções', async () => {
@@ -112,14 +117,19 @@ test('a paleta de comandos abre e fecha pelo teclado', async () => {
 });
 
 test('o catálogo de modelos abre e informa o estado real', async () => {
-  await page.getByRole('button', { name: /Catálogo de modelos/i }).first().click();
+  await page
+    .getByRole('button', { name: /Catálogo de modelos/i })
+    .first()
+    .click();
   const catalog = page.getByRole('dialog', { name: /Catálogo de modelos/i });
   await expect(catalog).toBeVisible();
 
   // O catálogo do OpenRouter é público: com rede ele lista modelos reais; sem
   // rede precisa explicar o motivo. Os dois desfechos são aceitáveis — o que
   // NÃO é aceitável é uma lista vazia sem explicação.
-  const summary = catalog.getByText(/modelo\(s\)|não pode ser descoberto|credencial|Conecte um provedor|Nenhum modelo/i).first();
+  const summary = catalog
+    .getByText(/modelo\(s\)|não pode ser descoberto|credencial|Conecte um provedor|Nenhum modelo/i)
+    .first();
   await expect(summary).toBeVisible({ timeout: 30_000 });
   const summaryText = (await summary.textContent()) ?? '';
 

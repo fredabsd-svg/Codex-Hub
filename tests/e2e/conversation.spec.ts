@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { testElectronArgs } from './launch';
 
 const SCREENSHOT_DIR = join(process.cwd(), 'test-results', 'capturas');
 const MODEL_ID = 'fake/redator-1';
@@ -101,7 +102,7 @@ test.beforeAll(async () => {
 
   const userData = mkdtempSync(join(tmpdir(), 'codex-hub-conv-'));
   app = await electron.launch({
-    args: ['out/main/main.js', `--user-data-dir=${userData}`],
+    args: [...testElectronArgs, 'out/main/main.js', `--user-data-dir=${userData}`],
     env: {
       ...process.env,
       NODE_ENV: 'production',
@@ -139,7 +140,10 @@ test('escolhe o modelo descoberto no endpoint', async () => {
 
   const picker = page.getByRole('dialog', { name: /^Modelo$/ });
   await expect(picker).toBeVisible();
-  await picker.getByRole('button', { name: /Endpoint de teste/ }).first().click();
+  await picker
+    .getByRole('button', { name: /Endpoint de teste/ })
+    .first()
+    .click();
 
   const row = picker.locator('[role="option"]', { hasText: MODEL_ID }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
@@ -182,4 +186,51 @@ test('a conversa persiste e é reaberta pela barra lateral após recarregar', as
   await entry.click();
   await expect(page.getByText(/e conclusão\./i).first()).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: join(SCREENSHOT_DIR, 'conversa-apos-recarga.png') });
+});
+
+test('busca na conversa e abre a mensagem encontrada', async () => {
+  await page.keyboard.press('Control+f');
+  const dialog = page.getByRole('dialog', { name: 'Buscar nesta conversa' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('combobox').fill('conclusão');
+  const result = dialog.getByRole('option', { name: /conclusão/i }).first();
+  await expect(result).toBeVisible();
+  await page.screenshot({ path: join(SCREENSHOT_DIR, 'busca-na-conversa.png') });
+  await result.click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.ch-found-message')).toContainText('e conclusão.');
+});
+
+test('controles e painel de contexto continuam acessíveis em 940px', async () => {
+  await page.setViewportSize({ width: 940, height: 720 });
+  const header = page.locator('.ch-workbench-header');
+  const clipped = await header.locator('button:visible').evaluateAll((buttons) =>
+    buttons
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const parent = button.closest('header')!.getBoundingClientRect();
+        return rect.left < parent.left - 1 || rect.right > parent.right + 1;
+      })
+      .map((button) => button.textContent),
+  );
+  expect(clipped).toEqual([]);
+  await header.getByRole('button', { name: /Abrir painel/i }).click();
+  const panel = page.getByRole('dialog', { name: 'Painel de contexto' });
+  await expect(panel).toBeVisible();
+  await panel.getByRole('tab', { name: 'Contexto', exact: true }).click();
+  await page.screenshot({ path: join(SCREENSHOT_DIR, 'painel-compacto.png') });
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('textbox', { name: /Descreva a tarefa/i })).toBeVisible();
+});
+
+test('visão geral oferece tarefas que preenchem o rascunho', async () => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Visão geral', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'O que vamos construir hoje?' })).toBeVisible();
+  await page.screenshot({ path: join(SCREENSHOT_DIR, 'visao-geral.png') });
+  await page.getByRole('button', { name: /Revisar código/ }).click();
+  await expect(page.getByRole('textbox', { name: /Descreva a tarefa/i })).toHaveValue(/Revise este projeto/);
+  await expect(page.getByRole('log').getByText('Revise este projeto', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: join(SCREENSHOT_DIR, 'tarefa-preparada.png') });
 });

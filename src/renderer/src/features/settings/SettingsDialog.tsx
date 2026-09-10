@@ -236,9 +236,23 @@ function ChatSection() {
 
 /* -------------------- Atalhos -------------------- */
 
-const SHORTCUTS: Array<{ keys: string[]; label: 'newConversation' | 'palette' | 'workspace' | 'attach' | 'send' | 'settings' | 'sidebar' | 'rightPanel' | 'escape' }> = [
+const SHORTCUTS: Array<{
+  keys: string[];
+  label:
+    | 'newConversation'
+    | 'palette'
+    | 'find'
+    | 'workspace'
+    | 'attach'
+    | 'send'
+    | 'settings'
+    | 'sidebar'
+    | 'rightPanel'
+    | 'escape';
+}> = [
   { keys: ['Ctrl', 'N'], label: 'newConversation' },
   { keys: ['Ctrl', 'K'], label: 'palette' },
+  { keys: ['Ctrl', 'F'], label: 'find' },
   { keys: ['Ctrl', 'O'], label: 'workspace' },
   { keys: ['Ctrl', 'Shift', 'O'], label: 'attach' },
   { keys: ['Ctrl', 'Enter'], label: 'send' },
@@ -255,17 +269,24 @@ function ShortcutsSection() {
       <SectionTitle>{t('shortcuts.title')}</SectionTitle>
       <dl className="ch-raised divide-y" style={{ borderColor: 'var(--border)' }}>
         {SHORTCUTS.map((shortcut) => (
-          <div key={shortcut.label} className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]">
+          <div
+            key={shortcut.label}
+            className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]"
+          >
             <dt className="text-[var(--text)]">
-              {shortcut.label === 'send' && settings.sendWithEnter ? t('shortcuts.sendEnter') : t(`shortcuts.${shortcut.label}`)}
+              {shortcut.label === 'send' && settings.sendWithEnter
+                ? t('shortcuts.sendEnter')
+                : t(`shortcuts.${shortcut.label}`)}
             </dt>
             <dd className="flex flex-none items-center gap-0.5">
-              {(shortcut.label === 'send' && settings.sendWithEnter ? ['Enter'] : shortcut.keys).map((key, index) => (
-                <span key={`${shortcut.label}-${index}`} className="flex items-center gap-0.5">
-                  {index > 0 ? <span className="text-[var(--text-faint)]">+</span> : null}
-                  <Kbd>{key}</Kbd>
-                </span>
-              ))}
+              {(shortcut.label === 'send' && settings.sendWithEnter ? ['Enter'] : shortcut.keys).map(
+                (key, index) => (
+                  <span key={`${shortcut.label}-${index}`} className="flex items-center gap-0.5">
+                    {index > 0 ? <span className="text-[var(--text-faint)]">+</span> : null}
+                    <Kbd>{key}</Kbd>
+                  </span>
+                ),
+              )}
             </dd>
           </div>
         ))}
@@ -313,7 +334,9 @@ function DefaultsSection() {
         <Select
           id="settings-engine"
           value={settings.defaultEngineId}
-          onChange={(event) => update({ defaultEngineId: event.target.value as AppSettings['defaultEngineId'] })}
+          onChange={(event) =>
+            update({ defaultEngineId: event.target.value as AppSettings['defaultEngineId'] })
+          }
         >
           <option value="direct">Motor direto</option>
           <option value="codex">Codex App Server</option>
@@ -324,7 +347,10 @@ function DefaultsSection() {
           id="settings-effort"
           value={settings.defaultReasoningEffort ?? ''}
           onChange={(event) =>
-            update({ defaultReasoningEffort: (event.target.value || undefined) as AppSettings['defaultReasoningEffort'] })
+            update({
+              defaultReasoningEffort: (event.target.value ||
+                undefined) as AppSettings['defaultReasoningEffort'],
+            })
           }
         >
           <option value="">Padrão do modelo</option>
@@ -349,7 +375,9 @@ function DefaultsSection() {
         <Select
           id="settings-startup"
           value={settings.startupBehavior}
-          onChange={(event) => update({ startupBehavior: event.target.value as AppSettings['startupBehavior'] })}
+          onChange={(event) =>
+            update({ startupBehavior: event.target.value as AppSettings['startupBehavior'] })
+          }
         >
           <option value="newConversation">{t('settings.startupNew')}</option>
           <option value="lastConversation">{t('settings.startupLast')}</option>
@@ -357,8 +385,8 @@ function DefaultsSection() {
         </Select>
       </Field>
       <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">
-        Estes são apenas padrões para novas conversas. Cada conversa mantém os próprios parâmetros, alteráveis a
-        qualquer momento para o próximo turno.
+        Estes são apenas padrões para novas conversas. Cada conversa mantém os próprios parâmetros, alteráveis
+        a qualquer momento para o próximo turno.
       </p>
     </section>
   );
@@ -410,9 +438,13 @@ function ProvidersSection() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[13.5px] font-semibold text-[var(--text)]">{provider.label}</p>
-                  <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">{provider.description}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+                    {provider.description}
+                  </p>
                   {provider.baseUrl ? (
-                    <p className="ch-mono mt-1 truncate text-[11.5px] text-[var(--text-faint)]">{provider.baseUrl}</p>
+                    <p className="ch-mono mt-1 truncate text-[11.5px] text-[var(--text-faint)]">
+                      {provider.baseUrl}
+                    </p>
                   ) : null}
                 </div>
                 <Badge
@@ -441,7 +473,10 @@ function ProvidersSection() {
 
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[220px] flex-1">
-                  <label htmlFor={`key-${provider.id}`} className="mb-1 block text-[12px] text-[var(--text-muted)]">
+                  <label
+                    htmlFor={`key-${provider.id}`}
+                    className="mb-1 block text-[12px] text-[var(--text-muted)]"
+                  >
                     {t('onboarding.apiKeyLabel')}
                   </label>
                   <Input
@@ -449,7 +484,9 @@ function ProvidersSection() {
                     type="password"
                     autoComplete="off"
                     value={keys[provider.id] ?? ''}
-                    onChange={(event) => setKeys((current) => ({ ...current, [provider.id]: event.target.value }))}
+                    onChange={(event) =>
+                      setKeys((current) => ({ ...current, [provider.id]: event.target.value }))
+                    }
                     className="h-8"
                   />
                 </div>
@@ -511,7 +548,10 @@ function ProvidersSection() {
               spellCheck={false}
             />
           </Field>
-          <Field label={`${t('onboarding.apiKeyLabel')} (${t('common.optional')})`} htmlFor="new-endpoint-key">
+          <Field
+            label={`${t('onboarding.apiKeyLabel')} (${t('common.optional')})`}
+            htmlFor="new-endpoint-key"
+          >
             <Input
               id="new-endpoint-key"
               type="password"
@@ -539,9 +579,9 @@ function ProvidersSection() {
           {t('common.add')}
         </Button>
         <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">
-          HTTPS é exigido para hosts remotos. HTTP é aceito para endereços locais (127.0.0.1, localhost, faixas
-          privadas). Credenciais nunca são reaproveitadas entre provedores nem encaminhadas em redirecionamentos
-          para outro host.
+          HTTPS é exigido para hosts remotos. HTTP é aceito para endereços locais (127.0.0.1, localhost,
+          faixas privadas). Credenciais nunca são reaproveitadas entre provedores nem encaminhadas em
+          redirecionamentos para outro host.
         </p>
       </div>
     </section>
@@ -599,7 +639,9 @@ function CodexSection() {
           </p>
         ) : null}
         {codex?.generatedTypesAreProvisional ? (
-          <p className="text-[11.5px] leading-snug text-[var(--warning)]">{t('settings.codexTypesProvisional')}</p>
+          <p className="text-[11.5px] leading-snug text-[var(--warning)]">
+            {t('settings.codexTypesProvisional')}
+          </p>
         ) : (
           <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">
             Tipos gerados a partir da versão {codex?.generatedTypesVersion ?? '—'}.
@@ -607,7 +649,11 @@ function CodexSection() {
         )}
       </div>
 
-      <Field label={t('settings.codexPath')} htmlFor="codex-path" hint="Deixe vazio para usar o PATH do sistema.">
+      <Field
+        label={t('settings.codexPath')}
+        htmlFor="codex-path"
+        hint="Deixe vazio para usar o PATH do sistema."
+      >
         <div className="flex gap-2">
           <Input
             id="codex-path"
@@ -632,7 +678,11 @@ function CodexSection() {
       </Field>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" loading={busy === 'start'} onClick={() => void run('start', () => invoke('codex:start'))}>
+        <Button
+          size="sm"
+          loading={busy === 'start'}
+          onClick={() => void run('start', () => invoke('codex:start'))}
+        >
           {t('settings.codexConnect')}
         </Button>
         <Button
@@ -743,7 +793,9 @@ function CodexSection() {
                 </button>
               </p>
             ) : null}
-            {login.expiresAt ? <p className="text-[var(--text-faint)]">Expira em {formatDateTime(login.expiresAt)}</p> : null}
+            {login.expiresAt ? (
+              <p className="text-[var(--text-faint)]">Expira em {formatDateTime(login.expiresAt)}</p>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
@@ -801,7 +853,9 @@ function PermissionsSection() {
         <Select
           id="settings-approval"
           value={settings.approvalPolicy}
-          onChange={(event) => update({ approvalPolicy: event.target.value as AppSettings['approvalPolicy'] })}
+          onChange={(event) =>
+            update({ approvalPolicy: event.target.value as AppSettings['approvalPolicy'] })
+          }
         >
           <option value="always">{t('settings.approvalAlways')}</option>
           <option value="onRequest">{t('settings.approvalOnRequest')}</option>
@@ -828,7 +882,9 @@ function PermissionsSection() {
         <Select
           id="settings-network"
           value={settings.toolNetworkPolicy}
-          onChange={(event) => update({ toolNetworkPolicy: event.target.value as AppSettings['toolNetworkPolicy'] })}
+          onChange={(event) =>
+            update({ toolNetworkPolicy: event.target.value as AppSettings['toolNetworkPolicy'] })
+          }
         >
           <option value="blocked">{t('settings.networkBlocked')}</option>
           <option value="workspaceAllowed">{t('settings.networkWorkspace')}</option>
@@ -836,8 +892,8 @@ function PermissionsSection() {
         </Select>
       </Field>
       <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">
-        A política escolhida aqui é a SOLICITADA. No motor Codex, quem aplica sandbox e rede das ferramentas é o
-        runtime oficial — a barra de status mostra se houve confirmação. No motor direto, as ferramentas
+        A política escolhida aqui é a SOLICITADA. No motor Codex, quem aplica sandbox e rede das ferramentas é
+        o runtime oficial — a barra de status mostra se houve confirmação. No motor direto, as ferramentas
         estruturadas não acessam a rede.
       </p>
     </section>
@@ -923,9 +979,9 @@ function AttachmentsSection() {
         />
       </Field>
       <p className="text-[11.5px] leading-snug text-[var(--text-faint)]">
-        Anexos são copiados para <code className="ch-mono">.codex-hub/anexos</code> dentro do workspace, com nome
-        seguro e sem conflito. Nada é executado, e o workspace inteiro nunca é enviado automaticamente. Antes do
-        primeiro envio, a interface indica qual serviço vai receber o conteúdo.
+        Anexos são copiados para <code className="ch-mono">.codex-hub/anexos</code> dentro do workspace, com
+        nome seguro e sem conflito. Nada é executado, e o workspace inteiro nunca é enviado automaticamente.
+        Antes do primeiro envio, a interface indica qual serviço vai receber o conteúdo.
       </p>
     </section>
   );
@@ -1008,7 +1064,10 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="flex-none text-[var(--text-faint)]">{label}</dt>
-      <dd className={clsx('min-w-0 break-all text-right text-[var(--text)]', mono && 'ch-mono')} title={value}>
+      <dd
+        className={clsx('min-w-0 break-all text-right text-[var(--text)]', mono && 'ch-mono')}
+        title={value}
+      >
         {value}
       </dd>
     </div>

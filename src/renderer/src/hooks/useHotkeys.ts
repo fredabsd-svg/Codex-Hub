@@ -28,6 +28,7 @@ export interface HotkeyHandlers {
   escape(): void;
   toggleRightPanel?(): void;
   toggleSidebar?(): void;
+  findInConversation?(): void;
 }
 
 function isTextEntry(target: EventTarget | null): boolean {
@@ -69,6 +70,12 @@ export function useHotkeys(handlers: HotkeyHandlers): void {
 
       // Com um diálogo ou menu aberto, os demais atalhos globais não agem.
       if (blockingDepth() > 0) return;
+
+      if (key === 'f' && current.findInConversation) {
+        event.preventDefault();
+        current.findInConversation();
+        return;
+      }
 
       if (key === 'enter') {
         event.preventDefault();

@@ -10,7 +10,13 @@ import type { FileTreeNode } from '@shared/ipc';
 import { t } from '../../i18n';
 import { errorOf, invoke } from '../../lib/api';
 import { summarizeUsage } from '@shared/conversationExport';
-import { describeUsage, formatBytes, formatContextWindow, formatNumber, NOT_INFORMED } from '../../lib/format';
+import {
+  describeUsage,
+  formatBytes,
+  formatContextWindow,
+  formatNumber,
+  NOT_INFORMED,
+} from '../../lib/format';
 import { resolveTheme, useAppStore } from '../../stores/appStore';
 import { useCatalogStore } from '../../stores/catalogStore';
 import { useConversationStore } from '../../stores/conversationStore';
@@ -29,11 +35,19 @@ const TABS: Array<{ value: RightPanelTab; label: string }> = [
   { value: 'context', label: t('rightPanel.context') },
 ];
 
-export function RightPanel({ conversation }: { conversation: ConversationSummary | null }) {
+export function RightPanel({
+  conversation,
+  embedded = false,
+}: {
+  conversation: ConversationSummary | null;
+  embedded?: boolean;
+}) {
   const layout = useUiStore((state) => state.layout);
   const setLayout = useUiStore((state) => state.setLayout);
   const applySettings = useAppStore((state) => state.applySettings);
-  const runtime = useConversationStore((state) => (conversation ? state.runtime[conversation.id] : undefined));
+  const runtime = useConversationStore((state) =>
+    conversation ? state.runtime[conversation.id] : undefined,
+  );
   const items = useConversationStore((state) => (conversation ? state.items[conversation.id] : undefined));
 
   const diffs = runtime?.diffs ?? [];
@@ -51,7 +65,7 @@ export function RightPanel({ conversation }: { conversation: ConversationSummary
     <aside
       aria-label="Painel de contexto"
       className="flex h-full min-h-0 flex-none flex-col border-l"
-      style={{ width: layout.rightPanelWidth, background: 'var(--surface-1)' }}
+      style={{ width: embedded ? '100%' : layout.rightPanelWidth, background: 'var(--surface-1)' }}
     >
       <div className="flex flex-none items-center gap-0.5 border-b px-1.5 py-1.5" role="tablist">
         {TABS.map((tab) => (
@@ -123,9 +137,12 @@ function FilesTab({ conversation }: { conversation: ConversationSummary | null }
   const pushError = useUiStore((state) => state.pushError);
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<{ path: string; content: string; binary: boolean; truncated: boolean } | null>(
-    null,
-  );
+  const [selected, setSelected] = useState<{
+    path: string;
+    content: string;
+    binary: boolean;
+    truncated: boolean;
+  } | null>(null);
 
   const workspacePath = conversation?.workspacePath;
 
@@ -151,7 +168,11 @@ function FilesTab({ conversation }: { conversation: ConversationSummary | null }
   const openFile = async (path: string): Promise<void> => {
     if (!workspacePath) return;
     try {
-      const file = await invoke('workspaces:readFile', { workspacePath, filePath: path, maxBytes: 512 * 1024 });
+      const file = await invoke('workspaces:readFile', {
+        workspacePath,
+        filePath: path,
+        maxBytes: 512 * 1024,
+      });
       setSelected({ path, content: file.content, binary: file.binary, truncated: file.truncated });
     } catch (err) {
       pushError(errorOf(err), 'Não foi possível abrir o arquivo');
@@ -190,7 +211,11 @@ function FilesTab({ conversation }: { conversation: ConversationSummary | null }
           </div>
           <div className="min-h-0 flex-1">
             {selected.binary ? (
-              <EmptyState icon={<IconFile size={22} />} title={t('rightPanel.binaryFile')} body={selected.path} />
+              <EmptyState
+                icon={<IconFile size={22} />}
+                title={t('rightPanel.binaryFile')}
+                body={selected.path}
+              />
             ) : (
               <MonacoViewer value={selected.content} path={selected.path} theme={resolveTheme(settings)} />
             )}
@@ -292,7 +317,10 @@ function OutputTab({ items }: { items: ConversationItem[] }) {
     <div className="h-full space-y-3 overflow-auto p-2.5">
       {items.map((item) => (
         <div key={item.id}>
-          <p className="ch-mono mb-1 truncate text-[11.5px] text-[var(--text-muted)]" title={item.command?.command}>
+          <p
+            className="ch-mono mb-1 truncate text-[11.5px] text-[var(--text-muted)]"
+            title={item.command?.command}
+          >
             $ {item.command?.command}
           </p>
           <TerminalOutput
@@ -348,10 +376,16 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
                 <Row label={t('rightPanel.totalsAll')} value={formatNumber(totals.totalTokens)} />
               ) : null}
               {totals.reportedCost !== undefined ? (
-                <Row label={t('rightPanel.totalsReported')} value={`${totals.currency} ${totals.reportedCost.toFixed(6)}`} />
+                <Row
+                  label={t('rightPanel.totalsReported')}
+                  value={`${totals.currency} ${totals.reportedCost.toFixed(6)}`}
+                />
               ) : null}
               {totals.estimatedCost !== undefined ? (
-                <Row label={t('rightPanel.totalsEstimated')} value={`≈ ${totals.currency} ${totals.estimatedCost.toFixed(6)}`} />
+                <Row
+                  label={t('rightPanel.totalsEstimated')}
+                  value={`≈ ${totals.currency} ${totals.estimatedCost.toFixed(6)}`}
+                />
               ) : null}
             </>
           ) : null}
@@ -359,7 +393,9 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
         {totals.turnsWithUsage === 0 ? (
           <p className="mt-1 text-[11.5px] text-[var(--text-faint)]">{t('rightPanel.totalsNone')}</p>
         ) : totals.costIncomplete ? (
-          <p className="mt-1 text-[11.5px] leading-snug text-[var(--warning)]">{t('rightPanel.totalsIncomplete')}</p>
+          <p className="mt-1 text-[11.5px] leading-snug text-[var(--warning)]">
+            {t('rightPanel.totalsIncomplete')}
+          </p>
         ) : null}
         {contextUsed !== undefined && model?.contextWindow ? (
           <div className="mt-2">
@@ -379,13 +415,22 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
         </h3>
         <dl className="space-y-1">
           <Row label="Provedor" value={conversation.providerId} />
-          <Row label="Motor" value={conversation.engineId === 'codex' ? 'Codex App Server' : 'Motor direto'} />
+          <Row
+            label="Motor"
+            value={conversation.engineId === 'codex' ? 'Codex App Server' : 'Motor direto'}
+          />
           <Row label="Modelo" value={conversation.modelId} mono />
           <Row label="Modo" value={conversation.mode} />
           <Row label="Janela de contexto" value={formatContextWindow(model?.contextWindow)} />
-          <Row label="Limite de saída" value={model?.maxOutputTokens ? String(model.maxOutputTokens) : NOT_INFORMED} />
+          <Row
+            label="Limite de saída"
+            value={model?.maxOutputTokens ? String(model.maxOutputTokens) : NOT_INFORMED}
+          />
           <Row label="Esforço de raciocínio" value={parameters.reasoningEffort ?? 'padrão do modelo'} />
-          <Row label="Temperatura" value={parameters.temperature !== undefined ? String(parameters.temperature) : 'não enviada'} />
+          <Row
+            label="Temperatura"
+            value={parameters.temperature !== undefined ? String(parameters.temperature) : 'não enviada'}
+          />
           <Row label="Personalidade" value={parameters.personality ?? 'não enviada'} />
         </dl>
         <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-faint)]">
@@ -416,8 +461,12 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
             {t('rightPanel.routing')}
           </h3>
           <dl className="space-y-1">
-            {parameters.routing.order?.length ? <Row label="Ordem" value={parameters.routing.order.join(', ')} /> : null}
-            {parameters.routing.only?.length ? <Row label="Somente" value={parameters.routing.only.join(', ')} /> : null}
+            {parameters.routing.order?.length ? (
+              <Row label="Ordem" value={parameters.routing.order.join(', ')} />
+            ) : null}
+            {parameters.routing.only?.length ? (
+              <Row label="Somente" value={parameters.routing.only.join(', ')} />
+            ) : null}
             {parameters.routing.ignore?.length ? (
               <Row label="Ignorar" value={parameters.routing.ignore.join(', ')} />
             ) : null}
@@ -430,8 +479,8 @@ function ContextTab({ conversation }: { conversation: ConversationSummary | null
             ) : null}
           </dl>
           <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-faint)]">
-            O OpenRouter é o roteador; o fornecedor de inferência escolhido por ele aparece em cada resposta quando
-            informado.
+            O OpenRouter é o roteador; o fornecedor de inferência escolhido por ele aparece em cada resposta
+            quando informado.
           </p>
         </section>
       ) : null}

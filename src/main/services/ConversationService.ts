@@ -29,7 +29,12 @@ import type {
   TurnParameters,
 } from '../../shared/domain';
 import { appError, toErrorDetail } from '../../shared/errors';
-import type { CreateConversationInput, ForkConversationInput, SearchConversationsResult, SendTurnInput } from '../../shared/ipc';
+import type {
+  CreateConversationInput,
+  ForkConversationInput,
+  SearchConversationsResult,
+  SendTurnInput,
+} from '../../shared/ipc';
 import type { Database } from '../persistence/database';
 import { conversationToSummary, type ConversationRow } from '../persistence/repositories';
 import type { ExecutionEngine, NewItem, StatusValue, TurnSink } from '../engines/types';
@@ -52,6 +57,8 @@ interface ActiveTurn {
   turnId: string;
   abort: AbortController;
   startedAt: number;
+  engine: ExecutionEngine;
+  conversation: ConversationRow;
 }
 
 /** Saída de terminal retida por item, para não travar a interface. */
@@ -87,17 +94,20 @@ export class ConversationService {
     return rows;
   }
 
-  search(query: string, limit = 50): SearchConversationsResult {
+  search(query: string, limit = 50, conversationId?: string): SearchConversationsResult {
+    if (conversationId) this.requireRow(conversationId);
     const needle = query.trim().toLowerCase();
-    const conversations = this.list(true).filter(
-      (c) =>
-        needle === '' ||
-        c.title.toLowerCase().includes(needle) ||
-        (c.lastMessagePreview ?? '').toLowerCase().includes(needle),
-    );
+    const conversations = this.list(true)
+      .filter((c) => !conversationId || c.id === conversationId)
+      .filter(
+        (c) =>
+          needle === '' ||
+          c.title.toLowerCase().includes(needle) ||
+          (c.lastMessagePreview ?? '').toLowerCase().includes(needle),
+      );
     return {
       conversations: conversations.slice(0, limit),
-      matches: needle === '' ? [] : this.deps.db.items.search(needle, limit),
+      matches: needle === '' ? [] : this.deps.db.items.search(needle, limit, conversationId),
     };
   }
 
@@ -208,6 +218,7 @@ export class ConversationService {
   async setWorkspace(conversationId: string, workspacePath: string | null): Promise<ConversationSummary> {
     const row = this.requireRow(conversationId);
     if (workspacePath === null) {
+      this.openedInEngine.delete(conversationId);
       const cleared = this.deps.db.conversations.update(conversationId, {
         workspacePath: undefined,
         workspaceId: undefined,
@@ -253,7 +264,11 @@ export class ConversationService {
         const forked = await tryCodexFork(engine, source, input.fromItemId);
         nativeThreadId = forked;
       } catch (err) {
-        logger.info('conversations', 'thread/fork indisponível; ramificação apenas local', toErrorDetail(err));
+        logger.info(
+          'conversations',
+          'thread/fork indisponível; ramificação apenas local',
+          toErrorDetail(err),
+        );
       }
     }
 
@@ -340,7 +355,8 @@ export class ConversationService {
 
     if (input.asSteer) {
       const steered = await this.steer(input.conversationId, input.text);
-      if (steered) return { turnId: this.activeTurns.get(input.conversationId)?.turnId ?? 'steer', accepted: true };
+      if (steered)
+        return { turnId: this.activeTurns.get(input.conversationId)?.turnId ?? 'steer', accepted: true };
       throw appError('validation', {
         message: 'Não há turno em andamento que aceite orientação nesta conversa.',
         action: 'Envie como nova mensagem.',
@@ -364,96 +380,123 @@ export class ConversationService {
 
     // Snapshot do workspace no INÍCIO do turno: trocar o workspace na interface
     // depois disso não redireciona este turno.
-    const conversationSnapshot: ConversationRow = { ...row, parameters };
+    const conversationSnapshot: ConversationRow = {
+      ...row,
+      parameters,
+      engineId: parameters.engineId,
+      providerId: parameters.providerId,
+      modelId: parameters.modelId,
+    };
     const engine = this.deps.engineFor(parameters.engineId ?? row.engineId);
-    await engine.ensureReady();
-
-    const attachments = this.deps.attachments.consume(input.conversationId, input.attachmentIds ?? []);
     const turnId = randomUUID();
     const abort = new AbortController();
-    this.activeTurns.set(input.conversationId, { turnId, abort, startedAt: Date.now() });
-
-    const sink = this.createSink(conversationSnapshot, turnId);
-
-    // Item do usuário é persistido E anunciado ANTES de qualquer chamada
-    // externa: a mensagem enviada aparece na conversa mesmo que o provedor
-    // demore, falhe ou nunca responda.
-    sink.itemStarted({
+    // Reserva síncrona: dois envios não podem ultrapassar ensureReady juntos.
+    this.activeTurns.set(input.conversationId, {
       turnId,
-      role: 'user',
-      kind: 'userMessage',
-      status: 'completed',
-      text: input.text,
-      attachments: attachments.length > 0 ? attachments : undefined,
-      modelId: parameters.modelId,
-      providerId: parameters.providerId,
-      engineId: parameters.engineId,
+      abort,
+      startedAt: Date.now(),
+      engine,
+      conversation: conversationSnapshot,
     });
-    this.deps.db.drafts.clear(input.conversationId);
-    emitTurnStarted(this.deps.bus, conversationSnapshot, turnId);
-    // Título automático na PRIMEIRA mensagem de uma conversa sem título
-    // próprio. `messageCount` é lido antes da mensagem ser anexada.
-    const untitled = row.titleIsLocal && (row.title === DEFAULT_TITLE || row.messageCount === 0);
-    if (untitled && input.text.trim() !== '') {
-      this.deps.db.conversations.update(row.id, { title: deriveTitle(input.text), titleIsLocal: true });
-      this.notifyConversationsChanged();
-    }
-    this.deps.onCatalogUse(parameters.providerId, parameters.modelId);
-    if (row.workspacePath) this.deps.workspaces.touch(row.workspacePath);
 
-    const policy = engine.effectivePolicy(conversationSnapshot, row.mode);
-    const discovered = await this.deps.skillsFor(engine.id, row.workspacePath).catch(() => []);
-    // A seleção de skills feita na interface é aplicada AQUI, no backend:
-    // só as skills escolhidas chegam ao motor. Sem seleção, vale o padrão.
-    const skills = parameters.skillIds
-      ? discovered.map((skill) => ({ ...skill, enabledLocally: parameters.skillIds!.includes(skill.id) }))
-      : discovered;
+    try {
+      await engine.ensureReady();
+      const policy = engine.effectivePolicy(conversationSnapshot, row.mode);
+      const discovered = await this.deps.skillsFor(engine.id, row.workspacePath).catch(() => []);
+      if (abort.signal.aborted)
+        throw appError('cancelled', { message: 'Envio interrompido antes de iniciar.' });
+      this.requireRow(row.id);
+      const skills = parameters.skillIds
+        ? discovered.map((skill) => ({ ...skill, enabledLocally: parameters.skillIds!.includes(skill.id) }))
+        : discovered;
+      const attachments = this.deps.attachments.consume(input.conversationId, input.attachmentIds ?? []);
 
-    void (async () => {
-      try {
-        if (!this.openedInEngine.has(row.id)) {
-          const opened = row.nativeThreadId
-            ? await engine.resumeConversation(conversationSnapshot, sink)
-            : await engine.openConversation(conversationSnapshot, sink);
-          if (opened.nativeThreadId) {
-            this.deps.db.conversations.update(row.id, { nativeThreadId: opened.nativeThreadId });
-          }
-          this.openedInEngine.add(row.id);
-        }
-        const latest = this.readRow(row.id) ?? conversationSnapshot;
-        await engine.runTurn({
-          // Workspace e modo vêm do SNAPSHOT do início do turno; apenas o ID
-          // nativo da thread é atualizado a partir do estado mais recente.
-          conversation: { ...conversationSnapshot, nativeThreadId: latest.nativeThreadId, parameters },
-          turnId,
-          text: input.text,
-          attachments,
-          parameters,
-          policy,
-          mode: row.mode,
-          history: this.deps.db.items.list(row.id).filter((i) => i.turnId !== turnId),
-          signal: abort.signal,
-          sink,
-          skills,
-        });
-      } catch (err) {
-        const detail = toErrorDetail(err);
-        logger.warn('conversations', 'Turno terminou com erro', { code: detail.code, conversationId: row.id });
-        sink.turnFailed(detail);
-        sink.status('error');
-      } finally {
-        this.activeTurns.delete(row.id);
+      const sink = this.createSink(conversationSnapshot, turnId);
+
+      // Item do usuário é persistido E anunciado ANTES de qualquer chamada
+      // externa: a mensagem enviada aparece na conversa mesmo que o provedor
+      // demore, falhe ou nunca responda.
+      sink.itemStarted({
+        turnId,
+        role: 'user',
+        kind: 'userMessage',
+        status: 'completed',
+        text: input.text,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        modelId: parameters.modelId,
+        providerId: parameters.providerId,
+        engineId: parameters.engineId,
+      });
+      this.deps.db.drafts.clear(input.conversationId);
+      emitTurnStarted(this.deps.bus, conversationSnapshot, turnId);
+      // Título automático na PRIMEIRA mensagem de uma conversa sem título
+      // próprio. `messageCount` é lido antes da mensagem ser anexada.
+      const untitled = row.titleIsLocal && row.title === DEFAULT_TITLE;
+      if (untitled && input.text.trim() !== '') {
+        this.deps.db.conversations.update(row.id, { title: deriveTitle(input.text), titleIsLocal: true });
+        this.notifyConversationsChanged();
       }
-    })();
+      this.deps.onCatalogUse(parameters.providerId, parameters.modelId);
+      if (row.workspacePath) this.deps.workspaces.touch(row.workspacePath);
 
-    return { turnId, accepted: true };
+      void (async () => {
+        try {
+          if (!this.openedInEngine.has(row.id)) {
+            const opened = row.nativeThreadId
+              ? await engine.resumeConversation(conversationSnapshot, sink)
+              : await engine.openConversation(conversationSnapshot, sink);
+            if (opened.nativeThreadId) {
+              this.deps.db.conversations.update(row.id, { nativeThreadId: opened.nativeThreadId });
+            }
+            this.openedInEngine.add(row.id);
+          }
+          const latest = this.readRow(row.id) ?? conversationSnapshot;
+          await engine.runTurn({
+            // Workspace e modo vêm do SNAPSHOT do início do turno; apenas o ID
+            // nativo da thread é atualizado a partir do estado mais recente.
+            conversation: { ...conversationSnapshot, nativeThreadId: latest.nativeThreadId, parameters },
+            turnId,
+            text: input.text,
+            attachments,
+            parameters,
+            policy,
+            mode: row.mode,
+            history: this.deps.db.items.list(row.id).filter((i) => i.turnId !== turnId),
+            signal: abort.signal,
+            sink,
+            skills,
+          });
+        } catch (err) {
+          const detail = toErrorDetail(err);
+          logger.warn('conversations', 'Turno terminou com erro', {
+            code: detail.code,
+            conversationId: row.id,
+          });
+          if (abort.signal.aborted) {
+            sink.turnCancelled();
+            sink.status('cancelled');
+          } else {
+            sink.turnFailed(detail);
+            sink.status('error');
+          }
+        } finally {
+          this.activeTurns.delete(row.id);
+        }
+      })();
+
+      return { turnId, accepted: true };
+    } catch (err) {
+      this.activeTurns.delete(row.id);
+      this.setStatus(conversationSnapshot, abort.signal.aborted ? 'cancelled' : 'error');
+      throw err;
+    }
   }
 
   async steer(conversationId: string, text: string): Promise<boolean> {
-    const row = this.requireRow(conversationId);
     const active = this.activeTurns.get(conversationId);
     if (!active) return false;
-    const engine = this.deps.engineFor(row.engineId);
+    const row = { ...active.conversation, nativeThreadId: this.readRow(conversationId)?.nativeThreadId };
+    const engine = active.engine;
     const accepted = await engine.steer(row, text);
     if (accepted) {
       const item = this.deps.db.items.append({
@@ -489,12 +532,12 @@ export class ConversationService {
   }
 
   async interrupt(conversationId: string): Promise<boolean> {
-    const row = this.readRow(conversationId);
     const active = this.activeTurns.get(conversationId);
-    if (!row || !active) return false;
+    if (!active) return false;
+    const row = { ...active.conversation, nativeThreadId: this.readRow(conversationId)?.nativeThreadId };
     this.setStatus(row, 'interrupting');
     active.abort.abort();
-    const engine = this.deps.engineFor(row.engineId);
+    const engine = active.engine;
     await engine.interrupt(row).catch((err) => {
       logger.debug('conversations', 'Interrupção no motor falhou', toErrorDetail(err));
     });
@@ -564,7 +607,9 @@ export class ConversationService {
           const combined = `${command.output}${chunk}`;
           const totalBytes = command.totalOutputBytes + Buffer.byteLength(chunk, 'utf8');
           const retained =
-            combined.length > MAX_RETAINED_OUTPUT ? combined.slice(combined.length - MAX_RETAINED_OUTPUT) : combined;
+            combined.length > MAX_RETAINED_OUTPUT
+              ? combined.slice(combined.length - MAX_RETAINED_OUTPUT)
+              : combined;
           this.deps.db.items.update(itemId, {
             status: 'streaming',
             command: {
@@ -601,7 +646,11 @@ export class ConversationService {
             fetchedAt: new Date().toISOString(),
             spend:
               usage.reportedCost !== undefined
-                ? { amount: usage.reportedCost, currency: usage.currency ?? 'USD', windowLabel: 'Custo deste turno' }
+                ? {
+                    amount: usage.reportedCost,
+                    currency: usage.currency ?? 'USD',
+                    windowLabel: 'Custo deste turno',
+                  }
                 : undefined,
             unavailable:
               usage.reportedCost === undefined && usage.estimatedCost === undefined

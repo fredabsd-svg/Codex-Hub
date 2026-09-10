@@ -82,6 +82,21 @@ instalação em si só pode ser verificada no Windows.
 4. Opcional: vincule um workspace (Ctrl+O) para habilitar os modos Planejar e
    Executar.
 
+## Novidades da versão 0.2
+
+- **Visão geral** com conversas recentes, projetos, conexões e sugestões para
+  revisar código, planejar mudanças, criar testes e entender um projeto.
+  As sugestões preenchem um rascunho para você editar antes de enviar.
+- **Busca nesta conversa (Ctrl+F)** com prévia, teclado e navegação até a
+  mensagem encontrada, inclusive em históricos longos.
+- **Histórico completo sob demanda**: carregue mensagens anteriores sem
+  perder a posição de leitura; respostas em andamento continuam preservadas.
+- **Layout adaptável**: cabeçalho com título e controles organizados; painel
+  de contexto acessível como diálogo em janelas menores.
+- **Envio mais confiável**: bloqueio de envios simultâneos, preservação do
+  próximo rascunho, cancelamento durante a conexão e títulos personalizados
+  respeitados desde a primeira mensagem.
+
 ## No dia a dia
 
 - **Paleta (Ctrl+K)** — ações com atalho visível, ações da conversa atual
@@ -109,6 +124,7 @@ instalação em si só pode ser verificada no Windows.
 | --- | --- |
 | `Ctrl+N` | Nova conversa |
 | `Ctrl+K` | Paleta de comandos e busca (alterna) |
+| `Ctrl+F` | Buscar nesta conversa |
 | `Ctrl+O` | Escolher workspace |
 | `Ctrl+Shift+O` | Anexar arquivos |
 | `Ctrl+Enter` | Enviar (ou `Enter`, com a preferência ligada) |

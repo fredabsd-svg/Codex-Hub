@@ -407,8 +407,8 @@ export function CommandPalette({
       hint: byId.get(match.conversationId)?.title,
       icon: <IconSearch size={14} />,
       run: () => {
-        void setActive(match.conversationId);
         onClose();
+        void useConversationStore.getState().revealItem(match.conversationId, match.itemId);
       },
     }));
 

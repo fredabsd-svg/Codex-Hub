@@ -33,7 +33,14 @@ function resetStores(): void {
     approvals: [],
     loadingItems: false,
   });
-  useCatalogStore.setState({ pages: {}, loading: {}, favorites: [], recents: [], filters: DEFAULT_FILTERS, probing: null });
+  useCatalogStore.setState({
+    pages: {},
+    loading: {},
+    favorites: [],
+    recents: [],
+    filters: DEFAULT_FILTERS,
+    probing: null,
+  });
   useUiStore.setState({ dialog: null, toasts: [], confirmRequest: null, autoScroll: true });
   useAppStore.setState({ ready: false, bootError: null, skills: [], usage: {}, notices: [] });
   resetOverlayStack();
@@ -49,7 +56,11 @@ afterEach(() => {
 async function openApp(options: Parameters<typeof installFakeBridge>[0] = {}): Promise<void> {
   bridge = installFakeBridge({ conversations: [conversationFixture()], items: { c1: [] }, ...options });
   render(<App />);
-  await waitFor(() => expect(screen.getByText('Ajustar o build')).toBeInTheDocument());
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    ).toBeInTheDocument(),
+  );
 }
 
 describe('Diálogos — foco inicial', () => {
@@ -80,7 +91,9 @@ describe('Atalhos globais com sobreposição aberta', () => {
     await userEvent.keyboard('{Control>}k{/Control}');
     await screen.findByRole('dialog', { name: /Comandos e busca/i });
     await userEvent.keyboard('{Control>}k{/Control}');
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Comandos e busca/i })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Comandos e busca/i })).not.toBeInTheDocument(),
+    );
   });
 });
 
@@ -105,11 +118,15 @@ describe('Paleta de comandos', () => {
 
   it('oferece ações da conversa atual, incluindo exportação', async () => {
     await openApp();
-    await userEvent.click(screen.getByText('Ajustar o build'));
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /Navegação principal/i })).getByText('Ajustar o build'),
+    );
     await userEvent.keyboard('{Control>}k{/Control}');
     const palette = await screen.findByRole('dialog', { name: /Comandos e busca/i });
     await userEvent.keyboard('exportar');
-    expect(within(palette).getByRole('option', { name: /Exportar a conversa atual como Markdown/i })).toBeInTheDocument();
+    expect(
+      within(palette).getByRole('option', { name: /Exportar a conversa atual como Markdown/i }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -161,7 +178,9 @@ describe('Excluir conversa', () => {
   it('pede confirmação no diálogo do sistema de design e só exclui ao confirmar', async () => {
     await openApp();
     // O clique com o botão direito cai na linha (div com o menu), não no <li>.
-    const row = screen.getByText('Ajustar o build').closest('button')?.parentElement as HTMLElement;
+    const row = within(screen.getByRole('navigation', { name: /Navegação principal/i }))
+      .getByText('Ajustar o build')
+      .closest('button')?.parentElement as HTMLElement;
     fireEvent.contextMenu(row);
     const menu = await screen.findByRole('dialog', { name: /Ações da conversa/i });
     await userEvent.click(within(menu).getByRole('button', { name: /^Excluir$/i }));
@@ -187,12 +206,20 @@ describe('Painel de contexto — totais', () => {
       activeId: 'c1',
       items: {
         c1: [
-          itemFixture({ id: 'a', usage: { totalTokens: 100, promptTokens: 80, completionTokens: 20, reportedCost: 0.01 } }),
-          itemFixture({ id: 'b', usage: { totalTokens: 50, promptTokens: 40, completionTokens: 10, reportedCost: 0.005 } }),
+          itemFixture({
+            id: 'a',
+            usage: { totalTokens: 100, promptTokens: 80, completionTokens: 20, reportedCost: 0.01 },
+          }),
+          itemFixture({
+            id: 'b',
+            usage: { totalTokens: 50, promptTokens: 40, completionTokens: 10, reportedCost: 0.005 },
+          }),
         ],
       },
     });
-    useUiStore.setState((state) => ({ layout: { ...state.layout, rightPanelTab: 'context', rightPanelCollapsed: false } }));
+    useUiStore.setState((state) => ({
+      layout: { ...state.layout, rightPanelTab: 'context', rightPanelCollapsed: false },
+    }));
     render(<RightPanel conversation={conversationFixture()} />);
     expect(screen.getByText('Totais da conversa')).toBeInTheDocument();
     expect(screen.getByText('150')).toBeInTheDocument();

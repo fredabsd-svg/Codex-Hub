@@ -33,6 +33,21 @@ export const IconPlus = (p: IconProps) => (
   </Icon>
 );
 
+export const IconCode = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9 2.5l-2 11" />
+  </Icon>
+);
+
+export const IconGrid = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2" y="2" width="4.5" height="4.5" rx="1" />
+    <rect x="9.5" y="2" width="4.5" height="4.5" rx="1" />
+    <rect x="2" y="9.5" width="4.5" height="4.5" rx="1" />
+    <rect x="9.5" y="9.5" width="4.5" height="4.5" rx="1" />
+  </Icon>
+);
+
 export const IconSearch = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="7" cy="7" r="3.75" />
@@ -131,7 +146,15 @@ export const IconStar = (p: IconProps) => (
 );
 
 export const IconStarFilled = ({ size = 16, ...p }: IconProps) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false" {...p}>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+    focusable="false"
+    {...p}
+  >
     <path d="M8 2.2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.4l-3.6 1.9.7-4L2.2 6.5l4-.6z" />
   </svg>
 );

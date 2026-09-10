@@ -1,0 +1,18 @@
+node_modules/
+out/
+dist/
+release/
+coverage/
+playwright-report/
+test-results/
+.vite/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+tests/live/.credentials
+
+# Artefatos de build incremental do TypeScript
+*.tsbuildinfo

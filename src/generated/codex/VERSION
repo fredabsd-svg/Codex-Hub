@@ -1,0 +1,4 @@
+provisorio
+# Nenhuma versão do Codex CLI foi usada para gerar tipos neste repositório.
+# Rode `npm run codex:types` em uma máquina com o Codex instalado e substitua
+# este arquivo pela saída de `codex --version`.

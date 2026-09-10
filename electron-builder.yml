@@ -1,0 +1,61 @@
+appId: com.codexhub.app
+productName: Codex Hub
+copyright: Copyright © 2026 Codex Hub
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  - '!**/{.eslintrc,.editorconfig,.prettierrc.json}'
+  - '!**/{test,tests,__tests__,docs,example,examples}/**'
+  # `node_modules` entra apenas com as dependências de PRODUÇÃO, que aqui é só
+  # `zod` — o processo principal e o preload são externalizados pelo
+  # electron-vite e precisam dela em tempo de execução. Pacotes usados somente
+  # pelo renderer (React, Zustand, clsx, Monaco) já saem dentro do bundle e
+  # ficam em devDependencies, então não são copiados.
+
+asar: true
+# Nenhum dado de usuário é gravado dentro do ASAR nem do diretório de instalação:
+# conversas, logs e credenciais ficam em app.getPath('userData') / app.getPath('logs').
+
+extraMetadata:
+  main: out/main/main.js
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Assinatura de código exige um certificado próprio. Nada é assinado por padrão:
+  # não declare o instalador como assinado sem evidência de assinatura.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Codex Hub
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+linux:
+  # Alvo auxiliar apenas para verificação de empacotamento em CI Linux.
+  target:
+    - target: dir
+      arch: [x64]
+  category: Development
+  icon: build/icon.png
+
+publish: null
+# Atualizações automáticas: base preparada (electron-builder + publish),
+# porém DESATIVADAS nesta versão. Ver ARCHITECTURE.md › Atualizações.

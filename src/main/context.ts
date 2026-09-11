@@ -134,6 +134,10 @@ export function createAppContext(options: { userDataDir?: string; logsDir?: stri
     appVersion,
     generatedTypesDir: resolveGeneratedTypesDir(),
     configuredPath: () => settings.get().codexExecutablePath || process.env.CODEX_HUB_CODEX_PATH || undefined,
+    // O override de ambiente precisa ser determinístico: ele é usado por
+    // automação e não deve cair silenciosamente no Codex real do PATH.
+    configuredPathOnly: () =>
+      (settings.get().codexExecutablePath ?? '').trim() === '' && Boolean(process.env.CODEX_HUB_CODEX_PATH?.trim()),
     modelProvider: () => {
       const current = settings.get();
       return {

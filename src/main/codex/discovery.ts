@@ -128,6 +128,8 @@ function classify(filePath: string, via: ResolvedExecutable['discoveredVia']): R
 export interface DiscoverOptions {
   /** Caminho configurado pela pessoa (Configurações › Codex). */
   configuredPath?: string;
+  /** Não procura alternativas quando o caminho configurado é inválido. */
+  configuredPathOnly?: boolean;
   /** Nome base do executável. */
   binaryName?: string;
 }
@@ -142,6 +144,7 @@ export function discoverCodexExecutable(options: DiscoverOptions = {}): Resolved
       if (isExecutableFile(candidate)) return classify(candidate, 'setting');
     }
     logger.warn('codex', 'Caminho configurado do Codex não é um executável válido', { configured });
+    if (options.configuredPathOnly) return null;
   }
 
   for (const dir of searchPath()) {

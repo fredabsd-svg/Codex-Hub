@@ -13,7 +13,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { testElectronArgs } from './launch';
@@ -211,8 +211,14 @@ test('prepara provedor, workspace e modo Executar', async () => {
   // Workspace pelo seletor (substituído acima).
   await nextDialogPath(workspaceDir);
   await page.getByRole('button', { name: /Escolher workspace/i }).click();
-  // A barra de status passa a mostrar o caminho real do workspace.
-  await expect(page.locator('footer').first()).toContainText(workspaceDir, { timeout: 20_000 });
+  // A barra abrevia caminhos longos visualmente, mas preserva o caminho real
+  // no tooltip acessível.
+  const workspaceLabel = page.locator('footer .ch-mono').first();
+  await expect(workspaceLabel).toContainText(basename(workspaceDir), { timeout: 20_000 });
+  await workspaceLabel.focus();
+  const workspaceTooltip = page.getByRole('tooltip');
+  await expect(workspaceTooltip).toContainText(basename(workspaceDir));
+  await expect(workspaceTooltip).not.toContainText('…');
 
   // Modo Executar só fica disponível com workspace: é a regra do backend.
   const executar = page.getByRole('radio', { name: /Executar/ }).first();

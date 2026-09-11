@@ -43,6 +43,8 @@ export interface CodexRuntimeOptions {
   appVersion: string;
   generatedTypesDir: string;
   configuredPath(): string | undefined;
+  /** Torna o caminho configurado exclusivo (usado por overrides de ambiente e testes). */
+  configuredPathOnly?(): boolean;
   /**
    * Provedor de modelos que o processo do Codex deve usar, já com a credencial
    * resolvida. Lido a cada início: mudar a configuração vale no próximo start.
@@ -169,7 +171,10 @@ export class CodexRuntime {
 
   async locate(explicitPath?: string): Promise<CodexRuntimeInfo> {
     const configured = explicitPath?.trim() || this.options.configuredPath();
-    const found = discoverCodexExecutable({ configuredPath: configured });
+    const found = discoverCodexExecutable({
+      configuredPath: configured,
+      configuredPathOnly: explicitPath === undefined && this.options.configuredPathOnly?.(),
+    });
     if (!found) {
       this.executable = null;
       this.version = undefined;

@@ -16,6 +16,28 @@ isso está dito de forma explícita — o aplicativo não promete interceptar tu
 - A credencial de um provedor **nunca** é reaproveitada ao testar uma URL
   diferente. Cada endpoint compatível registrado tem o próprio segredo.
 
+### A chave do OpenRouter entregue ao processo do Codex
+
+Existe **uma** situação em que um segredo sai do processo principal: quando a
+pessoa liga, explicitamente, "usar o OpenRouter como provedor do Codex"
+(Configurações › Codex; desligado por padrão). Regras dessa entrega:
+
+- a chave vai para o processo filho em **variável de ambiente**
+  (`OPENROUTER_API_KEY`), que é o mecanismo previsto pelo próprio Codex para
+  provedores declarados em `model_providers`;
+- **nunca** vai em argumento de linha de comando — argumentos são visíveis na
+  lista de processos do sistema. Há teste garantindo que nenhum argumento
+  montado contém a chave;
+- **nunca** vai pelo fluxo `account/login/start` com método `apiKey`: aquele
+  campo é a chave da OpenAI usada pelo Codex e continua separado;
+- o destino é o mesmo serviço que emitiu a credencial (openrouter.ai). Isso não
+  é reaproveitar a chave de um provedor em outro;
+- o trecho de `config.toml` que a interface exibe contém apenas o **nome** da
+  variável de ambiente, nunca o segredo;
+- a partir do momento em que a chave está no processo do Codex, o que ele faz
+  com ela é responsabilidade dele — este aplicativo não intercepta as conexões
+  de outro runtime, e diz isso na tela.
+
 ### Armazenamento
 
 - Segredos que a pessoa escolher salvar vão para o armazenamento protegido do

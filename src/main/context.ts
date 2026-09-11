@@ -20,6 +20,7 @@ import { SettingsService } from './services/SettingsService';
 import { WorkspaceService } from './services/WorkspaceService';
 import { ModelCatalog } from './providers/ModelCatalog';
 import { ProviderRegistry, CODEX_PROVIDER_ID } from './providers/registry';
+import { OPENROUTER_PROVIDER_ID } from './providers/OpenRouterProvider';
 import { ApprovalBroker } from './tools/ApprovalBroker';
 import { CodexRuntime } from './codex/CodexRuntime';
 import { CodexEngine } from './engines/CodexEngine';
@@ -101,6 +102,20 @@ export function createAppContext(options: { userDataDir?: string; logsDir?: stri
     if (next.codexExecutablePath !== previous.codexExecutablePath) {
       void codexRuntime.locate(next.codexExecutablePath).catch(() => undefined);
     }
+    if (next.codexModelProvider !== previous.codexModelProvider || next.codexWireApi !== previous.codexWireApi) {
+      // A configuração vale na PRÓXIMA partida do processo: reiniciar sozinho
+      // derrubaria um turno em andamento.
+      const at = new Date().toISOString();
+      bus.emitApp({ type: 'codex/runtime', runtime: codexRuntime.info(), at });
+      if (codexRuntime.isReady) {
+        bus.emitApp({
+          type: 'diagnostics/notice',
+          level: 'info',
+          message: 'O provedor de modelos do Codex foi alterado e vale a partir da próxima conexão.',
+          at,
+        });
+      }
+    }
   });
 
   const attachments = new AttachmentService(workspaces, () => {
@@ -119,6 +134,19 @@ export function createAppContext(options: { userDataDir?: string; logsDir?: stri
     appVersion,
     generatedTypesDir: resolveGeneratedTypesDir(),
     configuredPath: () => settings.get().codexExecutablePath || process.env.CODEX_HUB_CODEX_PATH || undefined,
+    modelProvider: () => {
+      const current = settings.get();
+      return {
+        mode: current.codexModelProvider,
+        wireApi: current.codexWireApi,
+        // A credencial só é lida quando a pessoa ligou o recurso. Ela vai ao
+        // processo filho por variável de ambiente e nunca por argumento.
+        apiKey:
+          current.codexModelProvider === 'openrouter'
+            ? credentials.getSecret(OPENROUTER_PROVIDER_ID)
+            : undefined,
+      };
+    },
     onNotification: (method, params) => {
       codexEngine.handleNotification(method, params);
     },

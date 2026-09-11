@@ -6,6 +6,13 @@
  * (https://learn.chatgpt.com/docs/app-server) e são os que o aplicativo tenta
  * usar. Eles NÃO são prova de que a versão instalada os implementa.
  *
+ * VERIFICAÇÃO PARCIAL (Codex 0.154.0, Windows, via `codex app-server
+ * generate-ts`): todos os métodos em `CODEX_METHODS` constam do `ClientRequest`
+ * daquela versão. Entre as notificações, três nomes que este aplicativo usava
+ * NÃO existem lá — estão marcados um a um e listados em
+ * `CODEX_EVENTS_NOT_IN_0_154_0`. As requisições iniciadas pelo servidor
+ * continuam NÃO verificadas: dependem do arquivo `ServerRequest.ts` gerado.
+ *
  * O `CodexAppServerClient`:
  *  - trata `-32601 method not found` como "recurso ausente nesta versão" e
  *    reporta isso na interface como indisponível, com motivo concreto;
@@ -52,23 +59,50 @@ export const CODEX_NOTIFICATIONS = {
  */
 export const CODEX_EVENTS = {
   threadStarted: 'thread/started',
+  threadStatusChanged: 'thread/status/changed',
   turnStarted: 'turn/started',
   turnCompleted: 'turn/completed',
+  /**
+   * NÃO existe no 0.154.0 — ver CODEX_EVENTS_NOT_IN_0_154_0. Mantido porque
+   * ignorar um nome que o servidor nunca envia não custa nada, e removê-lo
+   * quebraria versões que porventura o enviem.
+   */
   turnFailed: 'turn/failed',
+  turnPlanUpdated: 'turn/plan/updated',
   itemStarted: 'item/started',
+  /** Também ausente no 0.154.0; ver a constante acima. */
   itemUpdated: 'item/updated',
   itemCompleted: 'item/completed',
   agentMessageDelta: 'item/agentMessage/delta',
   planDelta: 'item/plan/delta',
   reasoningSummaryTextDelta: 'item/reasoning/summaryTextDelta',
+  reasoningTextDelta: 'item/reasoning/textDelta',
   commandExecutionOutputDelta: 'item/commandExecution/outputDelta',
+  fileChangeOutputDelta: 'item/fileChange/outputDelta',
+  fileChangePatchUpdated: 'item/fileChange/patchUpdated',
   turnDiffUpdated: 'turn/diff/updated',
   accountUpdated: 'account/updated',
   accountLoginCompleted: 'account/login/completed',
+  /** Ausente no 0.154.0: a falha chega dentro de `account/login/completed`. */
   accountLoginFailed: 'account/login/failed',
   accountRateLimitsUpdated: 'account/rateLimits/updated',
+  modelRerouted: 'model/rerouted',
+  warning: 'warning',
+  configWarning: 'configWarning',
+  deprecationNotice: 'deprecationNotice',
   error: 'error',
 } as const;
+
+/**
+ * Nomes que este aplicativo já usou e que **não constam** do `ServerNotification`
+ * do Codex 0.154.0 (verificado com `codex app-server generate-ts`). Ficam
+ * tolerados no roteador, nunca anunciados como suportados.
+ */
+export const CODEX_EVENTS_NOT_IN_0_154_0 = [
+  CODEX_EVENTS.turnFailed,
+  CODEX_EVENTS.itemUpdated,
+  CODEX_EVENTS.accountLoginFailed,
+] as const;
 
 /**
  * Requisições INICIADAS PELO SERVIDOR que o aplicativo responde.

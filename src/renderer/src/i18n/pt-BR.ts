@@ -495,6 +495,28 @@ export const ptBR = {
     codexDeviceUri: 'Endereço de verificação',
     codexTypesProvisional:
       'Os tipos do protocolo neste repositório são provisórios. Rode "npm run codex:types" com o Codex instalado para gerar os tipos reais.',
+    codexProviderTitle: 'Provedor de modelos do Codex',
+    codexProviderIntro:
+      'Escolhe de onde o processo do Codex tira a inferência. Não afeta o motor direto do aplicativo, que continua falando com o provedor da conversa.',
+    codexProviderLabel: 'Provedor usado pelo Codex',
+    codexProviderDefault: 'Provedor do próprio Codex (conta ChatGPT ou chave OpenAI)',
+    codexProviderOpenRouter: 'OpenRouter (usa a credencial já conectada)',
+    codexWireApi: 'Formato de requisição',
+    codexWireApiHint:
+      'Corresponde a wire_api no config.toml do Codex. Use "chat" para Chat Completions; "responses" só se o provedor oferecer esse formato.',
+    codexProviderState: {
+      default: 'provedor padrão do Codex',
+      requested: 'solicitado — sem handshake ainda',
+      accepted: 'aceito pelo processo — não validado',
+      missingCredential: 'sem credencial do OpenRouter',
+      overridesRejected: 'recusado por esta versão do Codex',
+    },
+    codexProviderNoCredential:
+      'Conecte o OpenRouter em Configurações › Provedores para usá-lo como provedor do Codex.',
+    codexProviderSecurity:
+      'A chave do OpenRouter é entregue ao processo do Codex por variável de ambiente, nunca por argumento de linha de comando, e nunca pelo fluxo de chave da OpenAI. A alteração vale a partir da próxima conexão.',
+    codexProviderToml: 'Equivalente no config.toml',
+    codexProviderTomlCopied: 'Trecho copiado',
     toolMaxSteps: 'Máximo de passos por turno',
     toolMaxDuration: 'Duração máxima do turno (segundos)',
     toolMaxResult: 'Tamanho máximo do resultado de ferramenta (KB)',

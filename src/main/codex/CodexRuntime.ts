@@ -14,6 +14,7 @@ import type {
   CodexAccountState,
   CodexAuthMethod,
   CodexLoginProgress,
+  CodexModelProviderInfo,
   CodexRuntimeInfo,
   ErrorDetail,
   ModelCatalogPage,
@@ -28,6 +29,13 @@ import { discoverCodexExecutable, readCodexVersion, type ResolvedExecutable } fr
 import { CODEX_METHODS } from './methods';
 import { arr, asRecord, bool, deepPick, int, pick, str } from './parse';
 import { ChildProcessTransport } from './transport';
+import { loginParams, matchVariant, parseExpectedVariants, preferredVariant } from './loginParams';
+import {
+  buildCodexProviderArgs,
+  buildCodexProviderEnv,
+  looksLikeConfigOverrideRejection,
+  type CodexModelProviderConfig,
+} from './modelProvider';
 
 export interface CodexRuntimeOptions {
   appName: string;
@@ -35,6 +43,11 @@ export interface CodexRuntimeOptions {
   appVersion: string;
   generatedTypesDir: string;
   configuredPath(): string | undefined;
+  /**
+   * Provedor de modelos que o processo do Codex deve usar, já com a credencial
+   * resolvida. Lido a cada início: mudar a configuração vale no próximo start.
+   */
+  modelProvider(): CodexModelProviderConfig;
   onNotification(method: string, params: unknown, generation: number): void | Promise<void>;
   onServerRequest(method: string, params: unknown, generation: number): Promise<unknown>;
   onRuntimeChanged(info: CodexRuntimeInfo): void;
@@ -55,6 +68,10 @@ export class CodexRuntime {
     message: 'A autenticação do Codex ainda não foi verificada.',
   };
   private activeLogins = new Map<string, CodexLoginProgress>();
+  /** Versões antigas do Codex não aceitam `-c chave=valor`; ver `start()`. */
+  private overridesRejected = false;
+  /** Saída de erro do processo, usada só para diagnosticar a partida. */
+  private lastStderr = '';
 
   constructor(private readonly options: CodexRuntimeOptions) {}
 
@@ -90,6 +107,49 @@ export class CodexRuntime {
       generatedTypesAreProvisional: generated.provisional,
       diagnostic: this.diagnostic ?? undefined,
       restartCount: this.client?.restarts ?? 0,
+      modelProvider: this.modelProviderInfo(),
+    };
+  }
+
+  /**
+   * Estado do provedor pedido ao processo do Codex.
+   *
+   * `accepted` diz apenas que o processo iniciou e concluiu o handshake com
+   * essa configuração — nunca que o provedor foi validado de ponta a ponta.
+   */
+  private modelProviderInfo(): CodexModelProviderInfo {
+    const config = this.options.modelProvider();
+    if (config.mode === 'default') {
+      return { mode: 'default', wireApi: config.wireApi, state: 'default' };
+    }
+    if (this.overridesRejected) {
+      return {
+        mode: config.mode,
+        wireApi: config.wireApi,
+        state: 'overridesRejected',
+        note:
+          'Esta versão do Codex recusou a configuração enviada pela linha de comando. ' +
+          'O processo está usando o provedor padrão. Configure o provedor no config.toml do Codex.',
+      };
+    }
+    if (!config.apiKey) {
+      return {
+        mode: config.mode,
+        wireApi: config.wireApi,
+        state: 'missingCredential',
+        note:
+          'Não há credencial do OpenRouter conectada, então o Codex está usando o provedor padrão dele. ' +
+          'Conecte o OpenRouter em Configurações › Provedores.',
+      };
+    }
+    return {
+      mode: config.mode,
+      wireApi: config.wireApi,
+      state: this.state === 'ready' ? 'accepted' : 'requested',
+      note:
+        this.state === 'ready'
+          ? 'O processo do Codex iniciou com esta configuração. Isso não é uma validação do provedor: confirme com um turno real.'
+          : 'Configuração enviada ao processo do Codex; ainda não houve handshake concluído com ela.',
     };
   }
 
@@ -159,11 +219,28 @@ export class CodexRuntime {
       return this.info();
     }
 
+    // Provedor de modelos pedido ao processo. No modo padrão nada muda: a
+    // lista de argumentos e o ambiente extra ficam vazios.
+    const provider = this.options.modelProvider();
+    const useOverrides = !this.overridesRejected;
+    const providerArgs = useOverrides ? buildCodexProviderArgs(provider) : [];
+    const providerEnv = useOverrides ? buildCodexProviderEnv(provider) : {};
+    if (providerArgs.length > 0) {
+      logger.info('codex', 'Iniciando o App Server com provedor de modelos configurado', {
+        mode: provider.mode,
+        wireApi: provider.wireApi,
+        // A chave nunca é registrada: apenas se existe.
+        hasCredential: Object.keys(providerEnv).length > 0,
+      });
+    }
+    this.lastStderr = '';
+
     const client = new CodexAppServerClient({
       createTransport: () =>
         new ChildProcessTransport({
           executable,
-          args: ['app-server'],
+          args: ['app-server', ...providerArgs],
+          env: providerEnv,
         }),
       clientInfo: {
         name: this.options.appName,
@@ -184,7 +261,11 @@ export class CodexRuntime {
         },
         onStderr: (text) => {
           const trimmed = text.trim();
-          if (trimmed !== '') logger.debug('codex:stderr', trimmed.slice(0, 2000));
+          if (trimmed === '') return;
+          // Guardado apenas para diagnosticar a partida; passa pela redação do
+          // logger como qualquer outra saída do processo.
+          if (this.lastStderr.length < 4000) this.lastStderr += `${trimmed}\n`;
+          logger.debug('codex:stderr', trimmed.slice(0, 2000));
         },
         onReconnected: async (generation) => {
           await this.refreshAccount().catch(() => undefined);
@@ -202,6 +283,17 @@ export class CodexRuntime {
     } catch (err) {
       this.diagnostic = toErrorDetail(err, 'codexIncompatible');
       logger.warn('codex', 'Falha ao iniciar o App Server', this.diagnostic);
+
+      // Uma versão do Codex que não aceite `-c chave=valor` derruba o processo
+      // antes do handshake. Nesse caso — e SOMENTE nesse — tentamos uma vez
+      // sem as sobrescritas: nenhuma operação mutável foi executada ainda.
+      if (providerArgs.length > 0 && looksLikeConfigOverrideRejection(this.lastStderr)) {
+        logger.warn('codex', 'A versão instalada recusou as sobrescritas de configuração; nova tentativa sem elas');
+        this.overridesRejected = true;
+        await this.client?.stop().catch(() => undefined);
+        this.client = null;
+        return this.start();
+      }
     }
     const info = this.info();
     this.options.onRuntimeChanged(info);
@@ -214,6 +306,9 @@ export class CodexRuntime {
       this.client = null;
     }
     this.state = 'stopped';
+    // Parar e conectar de novo é a forma de reavaliar a configuração: a
+    // recusa anterior das sobrescritas não vale para a próxima partida.
+    this.overridesRejected = false;
     const info = this.info();
     this.options.onRuntimeChanged(info);
     return info;
@@ -308,13 +403,7 @@ export class CodexRuntime {
   async startLogin(method: CodexAuthMethod, apiKey?: string): Promise<{ loginId: string }> {
     // Uma chave OpenRouter NUNCA é enviada ao fluxo de chave OpenAI do Codex:
     // este método só recebe o que a pessoa digitou no campo do Codex.
-    const params =
-      method === 'apiKey'
-        ? { method: 'apiKey', apiKey }
-        : method === 'deviceCode'
-          ? { method: 'deviceCode' }
-          : { method: 'chatgpt' };
-    const result = await this.request<unknown>(CODEX_METHODS.accountLoginStart, params, { timeoutMs: 60_000 });
+    const result = await this.requestLogin(method, apiKey);
     const loginId =
       str(deepPick(result, ['loginId', 'login_id', 'id'])) ?? `login-${Date.now().toString(36)}`;
     const progress: CodexLoginProgress = {
@@ -329,6 +418,39 @@ export class CodexRuntime {
     this.activeLogins.set(loginId, progress);
     this.options.onLoginProgress(progress);
     return { loginId };
+  }
+
+  /**
+   * Envia `account/login/start` com o discriminador `type`.
+   *
+   * Se a versão instalada não conhecer a variante enviada, ela responde
+   * listando as que aceita; usamos ESSA lista para tentar uma única vez mais.
+   * Uma requisição recusada não inicia login, então não há efeito repetido.
+   */
+  private async requestLogin(method: CodexAuthMethod, apiKey?: string): Promise<unknown> {
+    const variant = preferredVariant(method);
+    try {
+      return await this.request<unknown>(
+        CODEX_METHODS.accountLoginStart,
+        loginParams(method, variant, apiKey),
+        { timeoutMs: 60_000 },
+      );
+    } catch (err) {
+      const detail = toErrorDetail(err);
+      const options = parseExpectedVariants(`${detail.message} ${detail.technical ?? ''}`);
+      const alternative = options.length > 0 ? matchVariant(method, options) : null;
+      if (!alternative || alternative === variant) throw err;
+      logger.info('codex', 'Repetindo o início de login com a variante aceita pelo servidor', {
+        method,
+        tentada: variant,
+        aceita: alternative,
+      });
+      return this.request<unknown>(
+        CODEX_METHODS.accountLoginStart,
+        loginParams(method, alternative, apiKey),
+        { timeoutMs: 60_000 },
+      );
+    }
   }
 
   async cancelLogin(loginId: string): Promise<boolean> {

@@ -48,6 +48,15 @@ Verificado em execução real, não deduzido:
 | `account/read` sem o campo `params` → `Invalid request: missing field `params`` | `encodeRequest`/`encodeNotification` passaram a enviar `params: {}` quando não há argumento |
 | `account/login/start` com `{ method: … }` → `Invalid request: missing field `type`` | o discriminador virou `type` (`src/main/codex/loginParams.ts`) |
 
+Além disso, `codex app-server generate-ts` no 0.154.0 confirmou que **todos os
+métodos** usados pelo aplicativo existem no `ClientRequest` daquela versão, e
+revelou que três nomes de notificação que usávamos **não existem** lá
+(`turn/failed`, `item/updated`, `account/login/failed`) — ficam tolerados, nunca
+anunciados como suportados. Notificações reais que passaram a ser tratadas:
+`item/reasoning/textDelta`, `item/fileChange/outputDelta`,
+`item/fileChange/patchUpdated`, `turn/plan/updated`, `thread/status/changed`,
+`model/rerouted`, `warning`, `configWarning` e `deprecationNotice`.
+
 Os **nomes das variantes** de `type` continuam não confirmados. O cliente envia
 a mais provável e, se o servidor recusar com `unknown variant …, expected one of
 …`, usa a lista do próprio servidor para tentar uma única vez. Rode

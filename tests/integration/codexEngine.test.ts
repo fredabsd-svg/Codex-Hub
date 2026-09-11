@@ -319,6 +319,84 @@ describe('CodexEngine — turnos e eventos', () => {
     await promise;
     expect(sink.failures[0]?.action).toContain('Nenhum comando foi reexecutado');
   });
+
+
+  /**
+   * Notificações confirmadas no Codex 0.154.0 (`codex app-server generate-ts`).
+   *
+   * Estas existem no `ServerNotification` daquela versão e o aplicativo passou a
+   * tratá-las; antes caíam no ramo "notificação não tratada".
+   */
+  describe('Notificações verificadas no 0.154.0', () => {
+    it('mostra o raciocínio bruto de item/reasoning/textDelta', async () => {
+      const { engine } = engineWith();
+      const sink = createRecordingSink();
+      const promise = startTurn(engine, sink);
+      await tick(10);
+
+      engine.handleNotification('item/reasoning/textDelta', {
+        threadId: 'thread-1',
+        itemId: 'r1',
+        delta: 'pensando…',
+      });
+      await tick(2);
+
+      expect(sink.itemsOfKind('reasoningSummary')[0]?.text).toContain('pensando');
+      engine.handleNotification('turn/completed', { threadId: 'thread-1' });
+      await promise;
+    });
+
+    it('mostra o diff enquanto a alteração é aplicada (item/fileChange/patchUpdated)', async () => {
+      const { engine } = engineWith();
+      const sink = createRecordingSink();
+      const promise = startTurn(engine, sink);
+      await tick(10);
+
+      engine.handleNotification('item/fileChange/patchUpdated', {
+        threadId: 'thread-1',
+        files: [{ path: 'src/b.ts', unifiedDiff: '--- a\n+++ b\n@@ -1 +1 @@\n-a\n+b\n' }],
+      });
+      await tick(2);
+
+      expect(sink.diffs[0]?.[0]?.path).toBe('src/b.ts');
+      engine.handleNotification('turn/completed', { threadId: 'thread-1' });
+      await promise;
+    });
+
+    it('transforma aviso do servidor em recado, sem derrubar o turno', async () => {
+      const { engine } = engineWith();
+      const sink = createRecordingSink();
+      const promise = startTurn(engine, sink);
+      await tick(10);
+
+      engine.handleNotification('warning', { threadId: 'thread-1', message: 'limite de contexto próximo' });
+      engine.handleNotification('model/rerouted', { threadId: 'thread-1', message: 'modelo redirecionado' });
+      await tick(2);
+
+      const notices = sink.itemsOfKind('notice').map((item) => item.text);
+      expect(notices).toContain('limite de contexto próximo');
+      expect(notices).toContain('modelo redirecionado');
+      expect(sink.failures).toHaveLength(0);
+
+      engine.handleNotification('turn/completed', { threadId: 'thread-1' });
+      await promise;
+    });
+
+    it('ignora aviso sem texto em vez de inventar um', async () => {
+      const { engine } = engineWith();
+      const sink = createRecordingSink();
+      const promise = startTurn(engine, sink);
+      await tick(10);
+
+      engine.handleNotification('configWarning', { threadId: 'thread-1' });
+      await tick(2);
+
+      expect(sink.itemsOfKind('notice')).toHaveLength(0);
+      engine.handleNotification('turn/completed', { threadId: 'thread-1' });
+      await promise;
+    });
+  });
+
 });
 
 describe('CodexEngine — aprovações iniciadas pelo servidor', () => {

@@ -150,6 +150,16 @@ Uma falha de rede ou de limite de taxa **nunca** é convertida em
 
 ### Procedência dos nomes de método do Codex
 
+**Verificação parcial contra o Codex 0.154.0** (Windows, via
+`codex app-server generate-ts`): todos os métodos que o aplicativo chama constam
+do `ClientRequest` daquela versão. Também ficou provado que o campo `params`
+precisa estar presente em toda requisição e que o discriminador de
+`account/login/start` é `type`. Três nomes de notificação que o aplicativo usava
+não existem lá (`turn/failed`, `item/updated`, `account/login/failed`) e passaram
+a ser apenas tolerados. Continuam **não verificados**: os nomes das variantes de
+`type` e as requisições iniciadas pelo servidor (aprovações).
+
+
 Os identificadores em `src/main/codex/methods.ts` seguem a documentação pública
 do App Server (`https://learn.chatgpt.com/docs/app-server`). Eles são o que o
 aplicativo **tenta** usar — não são prova de que a versão instalada os

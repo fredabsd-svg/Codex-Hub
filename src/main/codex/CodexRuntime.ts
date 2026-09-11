@@ -29,6 +29,7 @@ import { discoverCodexExecutable, readCodexVersion, type ResolvedExecutable } fr
 import { CODEX_METHODS } from './methods';
 import { arr, asRecord, bool, deepPick, int, pick, str } from './parse';
 import { ChildProcessTransport } from './transport';
+import { loginParams, matchVariant, parseExpectedVariants, preferredVariant } from './loginParams';
 import {
   buildCodexProviderArgs,
   buildCodexProviderEnv,
@@ -402,13 +403,7 @@ export class CodexRuntime {
   async startLogin(method: CodexAuthMethod, apiKey?: string): Promise<{ loginId: string }> {
     // Uma chave OpenRouter NUNCA é enviada ao fluxo de chave OpenAI do Codex:
     // este método só recebe o que a pessoa digitou no campo do Codex.
-    const params =
-      method === 'apiKey'
-        ? { method: 'apiKey', apiKey }
-        : method === 'deviceCode'
-          ? { method: 'deviceCode' }
-          : { method: 'chatgpt' };
-    const result = await this.request<unknown>(CODEX_METHODS.accountLoginStart, params, { timeoutMs: 60_000 });
+    const result = await this.requestLogin(method, apiKey);
     const loginId =
       str(deepPick(result, ['loginId', 'login_id', 'id'])) ?? `login-${Date.now().toString(36)}`;
     const progress: CodexLoginProgress = {
@@ -423,6 +418,39 @@ export class CodexRuntime {
     this.activeLogins.set(loginId, progress);
     this.options.onLoginProgress(progress);
     return { loginId };
+  }
+
+  /**
+   * Envia `account/login/start` com o discriminador `type`.
+   *
+   * Se a versão instalada não conhecer a variante enviada, ela responde
+   * listando as que aceita; usamos ESSA lista para tentar uma única vez mais.
+   * Uma requisição recusada não inicia login, então não há efeito repetido.
+   */
+  private async requestLogin(method: CodexAuthMethod, apiKey?: string): Promise<unknown> {
+    const variant = preferredVariant(method);
+    try {
+      return await this.request<unknown>(
+        CODEX_METHODS.accountLoginStart,
+        loginParams(method, variant, apiKey),
+        { timeoutMs: 60_000 },
+      );
+    } catch (err) {
+      const detail = toErrorDetail(err);
+      const options = parseExpectedVariants(`${detail.message} ${detail.technical ?? ''}`);
+      const alternative = options.length > 0 ? matchVariant(method, options) : null;
+      if (!alternative || alternative === variant) throw err;
+      logger.info('codex', 'Repetindo o início de login com a variante aceita pelo servidor', {
+        method,
+        tentada: variant,
+        aceita: alternative,
+      });
+      return this.request<unknown>(
+        CODEX_METHODS.accountLoginStart,
+        loginParams(method, alternative, apiKey),
+        { timeoutMs: 60_000 },
+      );
+    }
   }
 
   async cancelLogin(loginId: string): Promise<boolean> {

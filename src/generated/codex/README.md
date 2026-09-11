@@ -38,3 +38,18 @@ inventar campos — e sem fingir que o protocolo foi verificado.
 Quando um método não existe na versão instalada, o servidor responde
 `-32601 method not found`; o cliente traduz isso para um estado
 **indisponível com motivo concreto** na interface, em vez de erro genérico.
+
+## Observações do Codex 0.154.0 (Windows)
+
+Verificado em execução real, não deduzido:
+
+| Observação | Consequência no código |
+| --- | --- |
+| `account/read` sem o campo `params` → `Invalid request: missing field `params`` | `encodeRequest`/`encodeNotification` passaram a enviar `params: {}` quando não há argumento |
+| `account/login/start` com `{ method: … }` → `Invalid request: missing field `type`` | o discriminador virou `type` (`src/main/codex/loginParams.ts`) |
+
+Os **nomes das variantes** de `type` continuam não confirmados. O cliente envia
+a mais provável e, se o servidor recusar com `unknown variant …, expected one of
+…`, usa a lista do próprio servidor para tentar uma única vez. Rode
+`npm run codex:types` (ou `codex app-server generate-json-schema`) para
+substituir isso pelos tipos reais.

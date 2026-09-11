@@ -68,9 +68,11 @@ describe('codificação', () => {
     expect(parsed.method).toBe('initialize');
   });
 
-  it('omite params quando não informado', () => {
+  it('envia params vazio quando não há argumento', () => {
+    // Verificado contra o Codex 0.154.0: omitir o campo faz o servidor
+    // responder `Invalid request: missing field \`params\``.
     const parsed = JSON.parse(encodeNotification('initialized')) as Record<string, unknown>;
-    expect('params' in parsed).toBe(false);
+    expect(parsed).toEqual({ method: 'initialized', params: {} });
   });
 
   it('codifica resposta e erro correlacionados ao id', () => {

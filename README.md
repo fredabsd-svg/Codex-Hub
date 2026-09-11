@@ -24,6 +24,13 @@ conduz a conversa, as ferramentas, as permissões e a execução). Trocar de mod
 não muda a interface; trocar de motor muda o que é possível fazer — e isso é
 mostrado explicitamente, nunca prometido de forma genérica.
 
+Os caminhos são independentes: o OpenRouter **não** passa pelo Codex e não
+precisa dele. Quem já tem o Codex instalado pode, opcionalmente, mandar o
+processo do Codex usar o OpenRouter como provedor de inferência
+(Configurações › Codex; desligado por padrão) — a chave vai por variável de
+ambiente, nunca pelo login de chave da OpenAI. Ver
+[PROVIDERS.md](PROVIDERS.md#provedor-de-modelos-usado-pelo-processo-do-codex).
+
 ## Requisitos
 
 - Windows 10/11 x64 para uso final (o desenvolvimento também roda em Linux/macOS).

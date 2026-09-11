@@ -578,6 +578,35 @@ export interface CodexLoginProgress {
   message?: string;
 }
 
+/** Provedor de modelos que o processo do Codex deve usar. */
+export type CodexModelProviderMode = 'default' | 'openrouter';
+
+/** Formato de requisição do provedor, na nomenclatura do Codex. */
+export type CodexWireApi = 'chat' | 'responses';
+
+/**
+ * Estado do provedor de modelos pedido ao Codex.
+ *
+ * `requested` significa que a configuração foi enviada ao processo, não que o
+ * provedor respondeu. `accepted` significa apenas que o processo iniciou e
+ * concluiu o handshake com essa configuração — a interface nunca chama isso de
+ * "validado".
+ */
+export type CodexModelProviderState =
+  | 'default'
+  | 'requested'
+  | 'accepted'
+  | 'missingCredential'
+  | 'overridesRejected';
+
+export interface CodexModelProviderInfo {
+  mode: CodexModelProviderMode;
+  wireApi: CodexWireApi;
+  state: CodexModelProviderState;
+  /** Explicação em pt-BR do estado atual, quando há o que dizer. */
+  note?: string;
+}
+
 export interface CodexRuntimeInfo {
   found: boolean;
   /** Caminho resolvido do executável. */
@@ -593,6 +622,8 @@ export interface CodexRuntimeInfo {
   generatedTypesAreProvisional: boolean;
   diagnostic?: ErrorDetail;
   restartCount: number;
+  /** Provedor de modelos pedido ao processo do Codex. */
+  modelProvider: CodexModelProviderInfo;
 }
 
 /* ------------------------------------------------------------------ *
@@ -628,6 +659,13 @@ export interface AppSettings {
   toolNetworkPolicy: NetworkPolicy;
   startupBehavior: StartupBehavior;
   codexExecutablePath?: string;
+  /**
+   * Provedor de modelos que o processo do Codex deve usar. `default` mantém o
+   * provedor do próprio Codex (conta ChatGPT ou chave da OpenAI).
+   */
+  codexModelProvider: CodexModelProviderMode;
+  /** Formato de requisição do provedor escolhido acima. */
+  codexWireApi: CodexWireApi;
   diagnosticsEnabled: boolean;
   diagnosticsLogLevel: 'error' | 'warn' | 'info' | 'debug';
   developerMode: boolean;
@@ -668,6 +706,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sandboxPolicy: 'workspaceWrite',
   toolNetworkPolicy: 'blocked',
   startupBehavior: 'newConversation',
+  codexModelProvider: 'default',
+  codexWireApi: 'chat',
   diagnosticsEnabled: true,
   diagnosticsLogLevel: 'info',
   developerMode: false,

@@ -191,6 +191,12 @@ A ausência do executável gera um teste ignorado, nunca uma aprovação.
   crédito, custo relatado) fica **implementado sem validação externa**.
 - Sem o Codex CLI, o motor Codex é exercitado apenas com transporte falso, e os
   tipos do protocolo continuam provisórios.
+- A opção "OpenRouter como provedor do Codex" é coberta por
+  `tests/unit/codexModelProvider.test.ts` (argumentos, variável de ambiente e
+  `config.toml`, incluindo a garantia de que a chave nunca entra em argumento) e
+  por `tests/renderer/codexProvider.test.tsx` (o que a tela mostra em cada
+  estado). **Nenhum Codex real aceitou essa configuração aqui** — por isso o
+  estado máximo exibido é "aceito pelo processo", nunca "validado".
 - `packaged.spec.ts` verifica a inicialização do pacote e a ponte do renderer.
   Isso não substitui instalar e desinstalar o NSIS manualmente no Windows.
 - Ambientes que bloqueiam sockets Unix ou não oferecem display não executam

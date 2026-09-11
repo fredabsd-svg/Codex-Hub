@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import type { AppSettings } from '@shared/domain';
+import { codexProviderConfigToml, CODEX_OPENROUTER_PROVIDER_ID } from '@shared/codexProvider';
 import { t } from '../../i18n';
 import { errorOf, invoke } from '../../lib/api';
 import { formatBytes, formatDateTime } from '../../lib/format';
@@ -704,6 +705,8 @@ function CodexSection() {
         </Button>
       </div>
 
+      <CodexModelProviderBlock />
+
       <div className="ch-raised space-y-2 p-3">
         <p className="text-[13px] font-semibold text-[var(--text)]">{t('settings.codexAuth')}</p>
         {account ? (
@@ -839,6 +842,115 @@ function CodexSection() {
         </div>
       </div>
     </section>
+  );
+}
+
+/* -------------------- Provedor de modelos do Codex -------------------- */
+
+const PROVIDER_STATE_TONE: Record<string, 'neutral' | 'success' | 'warning'> = {
+  default: 'neutral',
+  requested: 'warning',
+  accepted: 'success',
+  missingCredential: 'warning',
+  overridesRejected: 'warning',
+};
+
+/**
+ * Escolha do provedor que o PROCESSO DO CODEX usa.
+ *
+ * É diferente de escolher o modelo da conversa: aqui se decide de onde o Codex
+ * tira a inferência. O padrão continua sendo o provedor do próprio Codex, e o
+ * motor direto do aplicativo não é afetado por esta opção.
+ */
+function CodexModelProviderBlock() {
+  const [settings, update] = useSettings();
+  const codex = useAppStore((state) => state.codex);
+  const connections = useAppStore((state) => state.connections);
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const mode = settings.codexModelProvider;
+  const info = codex?.modelProvider;
+  // Mesmo identificador do provedor OpenRouter registrado no processo principal.
+  const openRouter = connections[CODEX_OPENROUTER_PROVIDER_ID];
+  const hasCredential = Boolean(openRouter?.maskedCredential);
+  const snippet = codexProviderConfigToml({ mode, wireApi: settings.codexWireApi });
+
+  return (
+    <div className="ch-raised space-y-2 p-3">
+      <p className="text-[13px] font-semibold text-[var(--text)]">{t('settings.codexProviderTitle')}</p>
+      <p className="text-[12px] leading-snug text-[var(--text-muted)]">{t('settings.codexProviderIntro')}</p>
+
+      <Field label={t('settings.codexProviderLabel')} htmlFor="codex-model-provider">
+        <Select
+          id="codex-model-provider"
+          value={mode}
+          onChange={(event) => update({ codexModelProvider: event.target.value as AppSettings['codexModelProvider'] })}
+        >
+          <option value="default">{t('settings.codexProviderDefault')}</option>
+          <option value="openrouter">{t('settings.codexProviderOpenRouter')}</option>
+        </Select>
+      </Field>
+
+      {mode === 'openrouter' ? (
+        <div className="space-y-2">
+          <Field label={t('settings.codexWireApi')} hint={t('settings.codexWireApiHint')} htmlFor="codex-wire-api">
+            <Select
+              id="codex-wire-api"
+              value={settings.codexWireApi}
+              onChange={(event) => update({ codexWireApi: event.target.value as AppSettings['codexWireApi'] })}
+            >
+              <option value="chat">chat</option>
+              <option value="responses">responses</option>
+            </Select>
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <Badge tone={PROVIDER_STATE_TONE[info?.state ?? 'requested'] ?? 'neutral'}>
+              {t(`settings.codexProviderState.${info?.state ?? 'requested'}` as 'settings.codexProviderState.requested')}
+            </Badge>
+            {hasCredential ? (
+              <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
+                <IconKey size={13} />
+                {t('settings.credentialStored', { masked: openRouter?.maskedCredential ?? '' })}
+              </span>
+            ) : (
+              <span className="text-[var(--warning)]">{t('settings.codexProviderNoCredential')}</span>
+            )}
+          </div>
+
+          {/* A falta de credencial já é dita na linha acima: não repetimos. */}
+          {info?.note && info.state !== 'missingCredential' ? (
+            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">{info.note}</p>
+          ) : null}
+
+          <p className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[var(--text-faint)]">
+            <IconKey size={13} className="mt-[2px] flex-none" />
+            <span>{t('settings.codexProviderSecurity')}</span>
+          </p>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] uppercase tracking-wide text-[var(--text-faint)]">
+                {t('settings.codexProviderToml')}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void invoke('clipboard:writeText', { text: snippet });
+                  pushToast({ tone: 'success', title: t('settings.codexProviderTomlCopied') });
+                }}
+              >
+                {t('common.copy')}
+              </Button>
+            </div>
+            <pre className="ch-mono overflow-x-auto rounded-[var(--radius-sm)] border p-2 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
+              {snippet}
+            </pre>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

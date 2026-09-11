@@ -168,6 +168,7 @@ export function installFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       initialized: false,
       generatedTypesAreProvisional: true,
       restartCount: 0,
+      modelProvider: { mode: 'default', wireApi: 'chat', state: 'default' },
       diagnostic: options.codexFound
         ? undefined
         : {

@@ -93,13 +93,21 @@ export function classify(rawLine: string): IncomingMessage | null {
   return { kind: 'invalid', reason: 'Mensagem sem `id` e sem `method`', raw: trimmed.slice(0, 400) };
 }
 
+/**
+ * `params` SEMPRE vai na linha, mesmo vazio.
+ *
+ * Verificado contra o Codex 0.154.0: omitir o campo faz o servidor responder
+ * `Invalid request: missing field \`params\`` — por exemplo em `account/read`,
+ * que não recebe argumento nenhum. O desserializador do servidor exige o campo
+ * presente, não apenas o conteúdo.
+ */
 export function encodeRequest(id: JsonRpcId, method: string, params?: unknown): string {
-  const payload: JsonRpcRequest = params === undefined ? { id, method } : { id, method, params };
+  const payload: JsonRpcRequest = { id, method, params: params ?? {} };
   return `${JSON.stringify(payload)}\n`;
 }
 
 export function encodeNotification(method: string, params?: unknown): string {
-  const payload: JsonRpcNotification = params === undefined ? { method } : { method, params };
+  const payload: JsonRpcNotification = { method, params: params ?? {} };
   return `${JSON.stringify(payload)}\n`;
 }
 

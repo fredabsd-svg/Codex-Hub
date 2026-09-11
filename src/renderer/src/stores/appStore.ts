@@ -78,6 +78,8 @@ const FALLBACK_SETTINGS: AppSettings = {
   sandboxPolicy: 'workspaceWrite',
   toolNetworkPolicy: 'blocked',
   startupBehavior: 'newConversation',
+  codexModelProvider: 'default',
+  codexWireApi: 'chat',
   diagnosticsEnabled: true,
   diagnosticsLogLevel: 'info',
   developerMode: false,

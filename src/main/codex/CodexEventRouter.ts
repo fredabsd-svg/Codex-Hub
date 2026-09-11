@@ -83,7 +83,10 @@ export class CodexEventRouter {
         if (localId && delta) target.sink.textDelta(localId, delta);
         return;
       }
-      case CODEX_EVENTS.reasoningSummaryTextDelta: {
+      // `item/reasoning/textDelta` é o raciocínio bruto do 0.154.0; vai para o
+      // mesmo item de raciocínio, que a interface já mostra de forma separada.
+      case CODEX_EVENTS.reasoningSummaryTextDelta:
+      case CODEX_EVENTS.reasoningTextDelta: {
         if (!target) return;
         const localId = this.ensureItem(target, params, 'reasoningSummary', 'assistant');
         const delta = deltaOf(params);
@@ -103,6 +106,60 @@ export class CodexEventRouter {
         const chunk = deltaOf(params);
         const stream = str(deepPick(params, ['stream', 'channel'])) === 'stderr' ? 'stderr' : 'stdout';
         if (localId && chunk) target.sink.outputDelta(localId, chunk, stream);
+        return;
+      }
+      case CODEX_EVENTS.fileChangeOutputDelta: {
+        if (!target) return;
+        const localId = this.ensureItem(target, params, 'fileChange', 'tool');
+        const chunk = deltaOf(params);
+        if (localId && chunk) target.sink.outputDelta(localId, chunk, 'stdout');
+        return;
+      }
+      // Alteração de arquivo em andamento: o diff aparece enquanto é aplicado,
+      // sem esperar o fim do turno.
+      case CODEX_EVENTS.fileChangePatchUpdated: {
+        if (!target) return;
+        const files = readDiff(params);
+        if (files.length === 0) return;
+        target.onDiff(files);
+        target.sink.diffUpdated(files);
+        return;
+      }
+      case CODEX_EVENTS.turnPlanUpdated: {
+        if (!target) return;
+        const localId = this.ensureItem(target, params, 'plan', 'assistant');
+        const steps = readPlan(params);
+        if (localId && steps.length > 0) target.sink.planUpdated(localId, steps);
+        return;
+      }
+      case CODEX_EVENTS.threadStatusChanged: {
+        if (!target) return;
+        // Só repassamos estados que a interface sabe representar; qualquer
+        // outro é ignorado em vez de virar um estado inventado.
+        const status = str(deepPick(params, ['status', 'state']));
+        if (status === 'running' || status === 'idle' || status === 'ready') {
+          target.sink.status(status === 'running' ? 'running' : 'ready');
+        }
+        return;
+      }
+      // Avisos do servidor não derrubam o turno: viram aviso na interface.
+      case CODEX_EVENTS.warning:
+      case CODEX_EVENTS.configWarning:
+      case CODEX_EVENTS.deprecationNotice:
+      case CODEX_EVENTS.modelRerouted: {
+        const text = str(deepPick(params, ['message', 'text', 'reason', 'notice']));
+        if (!text) return; // sem texto não há o que mostrar; nada é inventado
+        if (target) {
+          target.sink.itemStarted({
+            role: 'system',
+            kind: 'notice',
+            status: 'completed',
+            engineId: 'codex',
+            text,
+          });
+        } else {
+          logger.info('codex', 'Aviso do servidor sem conversa associada', { method, text });
+        }
         return;
       }
       case CODEX_EVENTS.turnDiffUpdated: {
@@ -182,7 +239,7 @@ export class CodexEventRouter {
   private ensureItem(
     target: RouterTarget,
     params: unknown,
-    kind: 'agentMessage' | 'reasoningSummary' | 'plan' | 'commandExecution',
+    kind: 'agentMessage' | 'reasoningSummary' | 'plan' | 'commandExecution' | 'fileChange',
     role: 'assistant' | 'tool',
   ): string | null {
     const nativeId = itemIdOf(params);

@@ -116,6 +116,15 @@ Os nomes de métodos usados estão em `main/codex/methods.ts`, com a procedênci
 documentada. `-32601 method not found` vira "recurso ausente nesta versão", com
 motivo concreto na interface — nunca um erro genérico.
 
+**Provedor de inferência do processo** (`main/codex/modelProvider.ts`,
+`shared/codexProvider.ts`): por padrão o Codex usa o provedor dele. Ligando a
+opção em Configurações › Codex, o processo sobe com `-c model_provider=…` e o
+bloco `model_providers.openrouter`, e recebe a chave em `OPENROUTER_API_KEY`
+pelo ambiente — nunca por argumento. Se a versão instalada recusar as
+sobrescritas de configuração, o runtime tenta **uma vez** sem elas (nenhuma
+operação mutável foi executada ainda) e reporta o motivo com o trecho de
+`config.toml` para configuração manual. Nada disso muda o motor direto.
+
 ## Streaming HTTP (provedores)
 
 `providers/chatCompletions.ts` implementa o parser SSE:

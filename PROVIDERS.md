@@ -76,6 +76,43 @@ escolhido dentro do catálogo que o próprio Codex reporta (`model/list`).
 `ENGINE_CAPABILITIES.direct.taskExecution` é declarado **não suportado**, com o
 motivo, e a interface mostra isso.
 
+### Provedor de modelos usado pelo processo do Codex
+
+O motor Codex e o motor direto continuam independentes: o aplicativo **não**
+roteia o motor direto pelo Codex, e o OpenRouter segue funcionando sem o Codex
+instalado. O que existe é uma opção, **desligada por padrão**, para quem já tem
+o Codex: mandar o processo do Codex usar o OpenRouter como provedor de
+inferência, recurso do próprio Codex CLI (`model_providers` no `config.toml`).
+
+Em Configurações › Codex › "Provedor de modelos do Codex":
+
+| Opção | Efeito |
+| --- | --- |
+| Provedor do próprio Codex (**padrão**) | nada muda: o processo sobe exatamente como antes |
+| OpenRouter | o processo sobe com `-c model_provider="openrouter"` e o bloco `model_providers.openrouter` (base URL, `env_key`, `wire_api`) |
+
+Como a credencial chega lá:
+
+- vai por **variável de ambiente** `OPENROUTER_API_KEY`, que é o que o Codex lê
+  quando o provedor está declarado — **nunca** por argumento de linha de comando
+  (argumentos aparecem na lista de processos do sistema);
+- **nunca** pelo fluxo `account/login/start` com método `apiKey`: aquele campo é
+  a chave da OpenAI usada pelo Codex, e continua separado;
+- o `config.toml` mostrado na interface contém só o **nome** da variável, nunca
+  o segredo.
+
+Estados possíveis, como aparecem na interface — nenhum deles diz "validado":
+
+| Estado | Significado |
+| --- | --- |
+| `solicitado` | a configuração foi enviada ao processo; ainda não houve handshake |
+| `aceito pelo processo` | o processo iniciou e concluiu o handshake com essa configuração. **Não** é prova de que o provedor respondeu a um turno |
+| `sem credencial do OpenRouter` | o recurso está ligado mas não há credencial conectada; o Codex usa o provedor dele |
+| `recusado por esta versão do Codex` | a versão instalada não aceitou `-c chave=valor`; o aplicativo tentou **uma vez** sem as sobrescritas e mostra o trecho do `config.toml` para configuração manual |
+
+A troca vale a partir da **próxima conexão** com o Codex: reiniciar o processo
+sozinho derrubaria um turno em andamento.
+
 ---
 
 ## 3. Matriz de capacidades
@@ -109,8 +146,19 @@ Uma falha de rede ou de limite de taxa **nunca** é convertida em
 | Tipos gerados do protocolo Codex | **bloqueado pelo ambiente** | `npm run codex:types` exige o Codex instalado. `src/generated/codex/VERSION` contém `provisorio` e o aplicativo **não** considera o protocolo validado |
 | Distribuição Windows: instalador NSIS e portable x64 | **implementado sem validação externa** | os dois `.exe` foram gerados por `npm run dist:win`; instalar e executar em Windows real não foi feito aqui |
 | Aplicativo empacotado (ASAR): interface, caminhos e ponte segura | **implementado e validado** | `tests/e2e/packaged.spec.ts` |
+| OpenRouter como provedor do processo do Codex | **implementado sem validação externa** | a montagem dos argumentos, da variável de ambiente e do `config.toml` é coberta por `tests/unit/codexModelProvider.test.ts` e `tests/renderer/codexProvider.test.tsx`. **Nenhum Codex real** aceitou essa configuração aqui: o estado na interface nunca passa de "aceito pelo processo" |
 
 ### Procedência dos nomes de método do Codex
+
+**Verificação parcial contra o Codex 0.154.0** (Windows, via
+`codex app-server generate-ts`): todos os métodos que o aplicativo chama constam
+do `ClientRequest` daquela versão. Também ficou provado que o campo `params`
+precisa estar presente em toda requisição e que o discriminador de
+`account/login/start` é `type`. Três nomes de notificação que o aplicativo usava
+não existem lá (`turn/failed`, `item/updated`, `account/login/failed`) e passaram
+a ser apenas tolerados. Continuam **não verificados**: os nomes das variantes de
+`type` e as requisições iniciadas pelo servidor (aprovações).
+
 
 Os identificadores em `src/main/codex/methods.ts` seguem a documentação pública
 do App Server (`https://learn.chatgpt.com/docs/app-server`). Eles são o que o
@@ -150,4 +198,7 @@ nenhum evento é inventado para preencher a interface.
 - Não mostra saldo, gasto ou tokens sem dado oficial do provedor.
 - Não apresenta plugins ou MCP como conectados: eles são roadmap e nada é
   exibido como operacional.
+- Não roteia o motor direto pelo Codex nem exige o Codex para conversar: usar o
+  OpenRouter **dentro** do Codex é uma opção desligada por padrão, e ligá-la não
+  muda o motor da conversa.
 - Não declara o protocolo do Codex validado por causa de tipos provisórios.

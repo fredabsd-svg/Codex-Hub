@@ -80,6 +80,8 @@ const settingsPatch = z
     toolNetworkPolicy: z.enum(['blocked', 'workspaceAllowed', 'allowed']),
     startupBehavior: z.enum(['newConversation', 'lastConversation', 'home']),
     codexExecutablePath: z.string().max(4096),
+    codexModelProvider: z.enum(['default', 'openrouter']),
+    codexWireApi: z.enum(['chat', 'responses']),
     diagnosticsEnabled: z.boolean(),
     diagnosticsLogLevel: z.enum(['error', 'warn', 'info', 'debug']),
     developerMode: z.boolean(),
